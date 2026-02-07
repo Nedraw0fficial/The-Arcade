@@ -93,14 +93,15 @@
 
         .scoreboard {
             position: fixed;
-            top: 20px;
+            top: 10px;
             left: 50%;
-            transform: translateX(-50%);
+            transform: translateX(-50%) scale(0.8);
             display: flex;
             gap: 100px;
             font-size: 48px;
-            z-index: 100;
+            z-index: 10000;
             text-shadow: 0 0 20px currentColor;
+            pointer-events: none;
         }
 
         .score-player, .score-ai {
@@ -243,7 +244,7 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Difficulty settings - REBALANCED
+        // Difficulty settings
         const difficulties = {
             easy: {
                 name: 'EASY',
@@ -321,9 +322,10 @@
         let survivalTime = 0;
         let survivalInterval = null;
 
-        // Impossible mode effects
-        let ballParticles = [];
+        // Impossible mode orbital particles
+        let orbitParticles = [];
         let stars = [];
+        let warpLines = [];
 
         // Audio context
         let audioContext = null;
@@ -397,13 +399,12 @@
                 canvas.style.borderColor = '#ffffff';
                 canvas.style.boxShadow = '0 0 30px rgba(255, 255, 255, 0.5)';
                 document.getElementById('impossibleEffects').style.display = 'block';
-                document.getElementById('survivalTimer').style.display = 'block';
                 generateStars();
+                initOrbitParticles();
             } else {
                 canvas.style.borderColor = color;
                 canvas.style.boxShadow = `0 0 30px ${color}`;
                 document.getElementById('impossibleEffects').style.display = 'none';
-                document.getElementById('survivalTimer').style.display = 'none';
             }
             
             const scoreboard = document.getElementById('scoreboard');
@@ -416,7 +417,7 @@
             badge.style.boxShadow = `0 0 15px ${color}`;
         }
 
-        // Generate stars for impossible mode
+        // Generate stars
         function generateStars() {
             const container = document.getElementById('impossibleEffects');
             for (let i = 0; i < 200; i++) {
@@ -430,6 +431,21 @@
             }
         }
 
+        // Initialize orbital particles
+        function initOrbitParticles() {
+            orbitParticles = [];
+            for (let i = 0; i < 80; i++) {
+                orbitParticles.push({
+                    angle: Math.random() * Math.PI * 2,
+                    distance: 20 + Math.random() * 50,
+                    speed: 0.02 + Math.random() * 0.04,
+                    size: 1 + Math.random() * 3,
+                    brightness: 0.3 + Math.random() * 0.7,
+                    orbitSpeed: 0.5 + Math.random() * 1.5
+                });
+            }
+        }
+
         // Start game
         function startGame() {
             document.getElementById('difficultySelector').style.display = 'none';
@@ -437,15 +453,6 @@
             document.getElementById('difficultyBadge').style.display = 'block';
             gameStarted = true;
             applyTheme();
-            
-            if (currentDifficulty.name === 'IMPOSSIBLE') {
-                survivalTime = 0;
-                survivalInterval = setInterval(() => {
-                    survivalTime += 0.1;
-                    document.getElementById('survivalTimer').textContent = 
-                        `SURVIVED: ${survivalTime.toFixed(1)}s`;
-                }, 100);
-            }
             
             resetBall();
             gameLoop();
@@ -461,19 +468,6 @@
             ball.dy = ball.speed * Math.sin(angle);
         }
 
-        // Create particle for impossible mode
-        function createParticle() {
-            return {
-                x: ball.x,
-                y: ball.y,
-                angle: Math.random() * Math.PI * 2,
-                distance: 0,
-                speed: Math.random() * 2 + 1,
-                life: 1.0,
-                size: Math.random() * 3 + 1
-            };
-        }
-
         // Draw everything
         function draw() {
             // Clear canvas
@@ -482,52 +476,115 @@
 
             // IMPOSSIBLE MODE EFFECTS
             if (currentDifficulty.name === 'IMPOSSIBLE') {
-                // Create new particles
-                for (let i = 0; i < 3; i++) {
-                    ballParticles.push(createParticle());
+                // Create warp lines periodically
+                if (Math.random() > 0.95) {
+                    warpLines.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height,
+                        angle: Math.random() * Math.PI * 2,
+                        length: 50 + Math.random() * 100,
+                        life: 1.0,
+                        speed: 2 + Math.random() * 3
+                    });
                 }
 
-                // Draw and update particles orbiting the ball
+                // Draw and update warp lines
                 ctx.save();
-                ballParticles = ballParticles.filter(p => {
-                    p.distance += p.speed;
-                    p.life -= 0.02;
+                warpLines = warpLines.filter(line => {
+                    line.life -= 0.02;
+                    line.x += Math.cos(line.angle) * line.speed;
+                    line.y += Math.sin(line.angle) * line.speed;
                     
-                    if (p.life <= 0) return false;
+                    if (line.life <= 0) return false;
 
-                    const x = ball.x + Math.cos(p.angle + p.distance * 0.1) * (20 + p.distance);
-                    const y = ball.y + Math.sin(p.angle + p.distance * 0.1) * (20 + p.distance);
-
-                    ctx.globalAlpha = p.life;
-                    ctx.fillStyle = '#ffffff';
+                    ctx.globalAlpha = line.life * 0.5;
+                    ctx.strokeStyle = `hsl(${280 + Math.random() * 40}, 100%, 70%)`;
+                    ctx.lineWidth = 2;
                     ctx.shadowBlur = 10;
-                    ctx.shadowColor = '#ffffff';
+                    ctx.shadowColor = '#8b00ff';
+                    
                     ctx.beginPath();
-                    ctx.arc(x, y, p.size, 0, Math.PI * 2);
-                    ctx.fill();
+                    ctx.moveTo(line.x, line.y);
+                    ctx.lineTo(
+                        line.x + Math.cos(line.angle) * line.length,
+                        line.y + Math.sin(line.angle) * line.length
+                    );
+                    ctx.stroke();
 
                     return true;
                 });
                 ctx.restore();
 
-                // Draw gravitational distortion rings
-                for (let i = 1; i <= 3; i++) {
+                // Draw chromatic aberration rings
+                for (let i = 1; i <= 5; i++) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.15 / i;
+                    ctx.strokeStyle = i % 2 === 0 ? '#ff00ff' : '#00ffff';
+                    ctx.lineWidth = 3;
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = ctx.strokeStyle;
                     ctx.beginPath();
-                    ctx.arc(ball.x, ball.y, 15 * i, 0, Math.PI * 2);
-                    ctx.strokeStyle = `rgba(138, 43, 226, ${0.3 / i})`;
-                    ctx.lineWidth = 2;
+                    ctx.arc(ball.x, ball.y, 15 + (i * 12), 0, Math.PI * 2);
                     ctx.stroke();
+                    ctx.restore();
                 }
 
-                // Draw accretion disk effect
-                const gradient = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, 40);
-                gradient.addColorStop(0, 'transparent');
-                gradient.addColorStop(0.5, 'rgba(138, 43, 226, 0.2)');
-                gradient.addColorStop(1, 'transparent');
-                ctx.fillStyle = gradient;
+                // Draw gravitational lensing distortion
+                const lensGradient = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, 60);
+                lensGradient.addColorStop(0, 'rgba(0, 0, 0, 0.5)');
+                lensGradient.addColorStop(0.4, 'rgba(138, 43, 226, 0.3)');
+                lensGradient.addColorStop(0.7, 'rgba(255, 0, 255, 0.2)');
+                lensGradient.addColorStop(1, 'transparent');
+                ctx.fillStyle = lensGradient;
                 ctx.beginPath();
-                ctx.arc(ball.x, ball.y, 40, 0, Math.PI * 2);
+                ctx.arc(ball.x, ball.y, 60, 0, Math.PI * 2);
                 ctx.fill();
+
+                // Update and draw orbital particles
+                ctx.save();
+                orbitParticles.forEach(p => {
+                    p.angle += p.speed * p.orbitSpeed;
+                    
+                    const x = ball.x + Math.cos(p.angle) * p.distance;
+                    const y = ball.y + Math.sin(p.angle) * p.distance;
+
+                    // Particle glow
+                    const particleGradient = ctx.createRadialGradient(x, y, 0, x, y, p.size * 3);
+                    particleGradient.addColorStop(0, `rgba(255, 255, 255, ${p.brightness})`);
+                    particleGradient.addColorStop(0.5, `rgba(138, 43, 226, ${p.brightness * 0.5})`);
+                    particleGradient.addColorStop(1, 'transparent');
+                    
+                    ctx.fillStyle = particleGradient;
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(x, y, p.size * 2, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Core particle
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowBlur = 10;
+                    ctx.beginPath();
+                    ctx.arc(x, y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                ctx.restore();
+
+                // Draw accretion disk with rotation
+                ctx.save();
+                ctx.globalAlpha = 0.4;
+                for (let i = 0; i < 3; i++) {
+                    const diskGradient = ctx.createRadialGradient(ball.x, ball.y, 20, ball.x, ball.y, 50 + i * 10);
+                    diskGradient.addColorStop(0, 'transparent');
+                    diskGradient.addColorStop(0.3, `rgba(138, 43, 226, ${0.3 - i * 0.1})`);
+                    diskGradient.addColorStop(0.6, `rgba(255, 0, 255, ${0.2 - i * 0.05})`);
+                    diskGradient.addColorStop(1, 'transparent');
+                    ctx.fillStyle = diskGradient;
+                    ctx.beginPath();
+                    ctx.arc(ball.x, ball.y, 50 + i * 10, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.restore();
             }
 
             // Draw center line
@@ -550,36 +607,56 @@
 
             // Draw ball
             if (currentDifficulty.name === 'IMPOSSIBLE') {
-                // Ball trail effect
-                ctx.globalAlpha = 0.4;
-                for (let i = 0; i < 8; i++) {
+                // Ball trail with color shift
+                ctx.globalAlpha = 0.6;
+                for (let i = 0; i < 10; i++) {
+                    const trailX = ball.x - ball.dx * i * 1.5;
+                    const trailY = ball.y - ball.dy * i * 1.5;
+                    const alpha = 1 - i / 10;
+                    const hue = 280 - i * 5;
+                    
+                    ctx.fillStyle = `hsla(${hue}, 100%, 70%, ${alpha})`;
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = `hsl(${hue}, 100%, 70%)`;
                     ctx.beginPath();
-                    ctx.arc(ball.x - ball.dx * i * 2, ball.y - ball.dy * i * 2, ball.radius - i * 0.5, 0, Math.PI * 2);
-                    ctx.fillStyle = `rgba(255, 255, 255, ${1 - i / 8})`;
+                    ctx.arc(trailX, trailY, ball.radius - i * 0.3, 0, Math.PI * 2);
                     ctx.fill();
                 }
                 ctx.globalAlpha = 1;
 
-                // Main ball with void effect
-                const voidGradient = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, ball.radius * 3);
+                // Main void ball with intense effects
+                const voidGradient = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, ball.radius * 4);
                 voidGradient.addColorStop(0, '#000000');
-                voidGradient.addColorStop(0.3, '#8b00ff');
-                voidGradient.addColorStop(0.6, '#ffffff');
+                voidGradient.addColorStop(0.2, '#1a001a');
+                voidGradient.addColorStop(0.4, '#8b00ff');
+                voidGradient.addColorStop(0.6, '#ff00ff');
+                voidGradient.addColorStop(0.8, '#ffffff');
                 voidGradient.addColorStop(1, 'transparent');
                 ctx.fillStyle = voidGradient;
-                ctx.shadowBlur = 40;
+                ctx.shadowBlur = 50;
                 ctx.shadowColor = '#8b00ff';
                 ctx.beginPath();
-                ctx.arc(ball.x, ball.y, ball.radius * 2, 0, Math.PI * 2);
+                ctx.arc(ball.x, ball.y, ball.radius * 3, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Event horizon
+                // Event horizon core
                 ctx.fillStyle = '#000000';
-                ctx.shadowBlur = 20;
+                ctx.shadowBlur = 30;
                 ctx.shadowColor = '#ffffff';
                 ctx.beginPath();
                 ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
                 ctx.fill();
+
+                // Lens flare effect
+                ctx.save();
+                ctx.globalAlpha = 0.4;
+                ctx.fillStyle = '#ffffff';
+                ctx.shadowBlur = 40;
+                ctx.shadowColor = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(ball.x - 2, ball.y - 2, ball.radius * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
             } else {
                 ctx.fillStyle = currentDifficulty.color;
                 ctx.shadowBlur = 20;
@@ -660,8 +737,7 @@
                 document.getElementById('aiScore').textContent = aiScore;
                 playSound(200, 0.3, 'square');
                 
-                // In IMPOSSIBLE mode, game never ends
-                if (currentDifficulty.name !== 'IMPOSSIBLE' && aiScore >= 11) {
+                if (aiScore >= 11) {
                     endGame(false);
                 } else {
                     resetBall();
@@ -693,9 +769,6 @@
         // End game
         function endGame(playerWon) {
             gameStarted = false;
-            if (survivalInterval) {
-                clearInterval(survivalInterval);
-            }
             
             const gameOverScreen = document.getElementById('gameOver');
             const title = document.getElementById('gameOverTitle');
@@ -709,10 +782,7 @@
             gameOverScreen.querySelector('button').style.color = color;
             gameOverScreen.querySelector('button').style.borderColor = color;
             
-            if (currentDifficulty.name === 'IMPOSSIBLE') {
-                title.textContent = 'THE VOID CONSUMED YOU';
-                result.textContent = `You survived ${survivalTime.toFixed(1)} seconds`;
-            } else if (playerWon) {
+            if (playerWon) {
                 title.textContent = 'VICTORY!';
                 result.textContent = `You defeated the AI at ${currentDifficulty.name} difficulty!`;
             } else {
@@ -730,7 +800,6 @@
             document.getElementById('difficultyBadge').style.display = 'none';
             document.getElementById('difficultySelector').style.display = 'block';
             document.getElementById('impossibleEffects').style.display = 'none';
-            document.getElementById('survivalTimer').style.display = 'none';
             
             // Reset scores
             playerScore = 0;
@@ -739,7 +808,8 @@
             document.getElementById('aiScore').textContent = '0';
             
             // Clear effects
-            ballParticles = [];
+            orbitParticles = [];
+            warpLines = [];
             stars.forEach(star => star.remove());
             stars = [];
         }
