@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Pong</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            background: #0a0a0f;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Courier New', monospace;
+        }
+
+        .game-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .difficulty-selector {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.7);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 50px 80px;
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.6);
+            text-align: center;
+            z-index: 200;
+            border-radius: 8px;
+        }
+
+        .difficulty-selector h2 {
+            font-size: 28px;
+            margin-bottom: 30px;
+            color: #00ff00;
+            text-shadow: 0 0 15px #00ff00;
+        }
+
+        .difficulty-display {
+            font-size: 36px;
+            margin: 30px 0;
+            text-shadow: 0 0 20px currentColor;
+            font-weight: bold;
+            letter-spacing: 0.1em;
+        }
+
+        .difficulty-info {
+            font-size: 14px;
+            color: #888;
+            margin-top: 15px;
+            line-height: 1.6;
+        }
+
+        .start-button {
+            background: transparent;
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            padding: 15px 40px;
+            font-size: 16px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            margin-top: 30px;
+            transition: all 0.3s;
+            text-shadow: 0 0 5px #00ff00;
+        }
+
+        .start-button:hover {
+            background: #00ff00;
+            color: #000;
+            box-shadow: 0 0 20px #00ff00;
+            transform: scale(1.05);
+        }
+
+        .scoreboard {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 100px;
+            font-size: 48px;
+            z-index: 100;
+            text-shadow: 0 0 20px currentColor;
+        }
+
+        .score-player, .score-ai {
+            font-weight: bold;
+            letter-spacing: 0.1em;
+        }
+
+        .difficulty-badge {
+            position: fixed;
+            top: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 18px;
+            padding: 8px 20px;
+            border: 2px solid;
+            border-radius: 4px;
+            z-index: 100;
+            text-shadow: 0 0 10px currentColor;
+            box-shadow: 0 0 15px currentColor;
+        }
+
+        canvas {
+            border: 3px solid;
+            box-shadow: 0 0 30px;
+            background: #000;
+            display: block;
+        }
+
+        .game-over {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.7);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 50px 80px;
+            border: 3px solid;
+            box-shadow: 0 0 40px;
+            display: none;
+            text-align: center;
+            z-index: 200;
+            border-radius: 8px;
+        }
+
+        .game-over h2 {
+            font-size: 32px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px currentColor;
+        }
+
+        .game-over .result {
+            font-size: 24px;
+            margin-bottom: 30px;
+            text-shadow: 0 0 15px currentColor;
+        }
+
+        .game-over button {
+            background: transparent;
+            border: 2px solid;
+            padding: 15px 40px;
+            font-size: 16px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s;
+            text-shadow: 0 0 5px currentColor;
+        }
+
+        .game-over button:hover {
+            transform: scale(1.05);
+        }
+
+        /* IMPOSSIBLE MODE EFFECTS */
+        .impossible-effects {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+            display: none;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 3px #fff;
+            animation: twinkle 3s ease-in-out infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        .survival-timer {
+            position: fixed;
+            top: 140px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            color: #fff;
+            text-shadow: 0 0 15px #fff;
+            z-index: 100;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="difficulty-selector" id="difficultySelector">
+        <h2>SELECT DIFFICULTY</h2>
+        <div class="difficulty-display" id="difficultyDisplay">EASY</div>
+        <div class="difficulty-info">Press SPACE to cycle | Click START to begin</div>
+        <button class="start-button" onclick="startGame()">START GAME</button>
+    </div>
+
+    <div class="game-container">
+        <div class="scoreboard" id="scoreboard" style="display: none;">
+            <div class="score-player" id="playerScore">0</div>
+            <div class="score-ai" id="aiScore">0</div>
+        </div>
+        <div class="difficulty-badge" id="difficultyBadge" style="display: none;"></div>
+        <div class="survival-timer" id="survivalTimer">SURVIVED: 0.0s</div>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+    </div>
+
+    <div class="impossible-effects" id="impossibleEffects">
+        <div class="black-hole" id="blackHole"></div>
+    </div>
+
+    <div class="game-over" id="gameOver">
+        <h2 id="gameOverTitle">GAME OVER</h2>
+        <div class="result" id="gameResult"></div>
+        <button onclick="backToMenu()">BACK TO MENU</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Difficulty settings - REBALANCED
+        const difficulties = {
+            easy: {
+                name: 'EASY',
+                color: '#00ff00',
+                ballSpeed: 3.5,
+                paddleSpeed: 5,
+                aiSpeed: 2.5,
+                aiError: 0.35,
+                ballAccel: 1.015,
+                aiReaction: 0.65
+            },
+            normal: {
+                name: 'NORMAL',
+                color: '#ffffff',
+                ballSpeed: 4.5,
+                paddleSpeed: 6,
+                aiSpeed: 3.5,
+                aiError: 0.25,
+                ballAccel: 1.025,
+                aiReaction: 0.8
+            },
+            hard: {
+                name: 'HARD',
+                color: '#ffff00',
+                ballSpeed: 5.5,
+                paddleSpeed: 7,
+                aiSpeed: 5,
+                aiError: 0.15,
+                ballAccel: 1.035,
+                aiReaction: 0.9
+            },
+            insane: {
+                name: 'INSANE',
+                color: '#ff0000',
+                ballSpeed: 6.5,
+                paddleSpeed: 8,
+                aiSpeed: 7,
+                aiError: 0.08,
+                ballAccel: 1.045,
+                aiReaction: 0.96
+            },
+            devious: {
+                name: 'DEVIOUS',
+                color: '#ff00ff',
+                ballSpeed: 7.5,
+                paddleSpeed: 9,
+                aiSpeed: 9,
+                aiError: 0.03,
+                ballAccel: 1.055,
+                aiReaction: 0.99
+            },
+            impossible: {
+                name: 'IMPOSSIBLE',
+                color: '#ffffff',
+                ballSpeed: 9,
+                paddleSpeed: 10,
+                aiSpeed: 15,
+                aiError: 0,
+                ballAccel: 1.07,
+                aiReaction: 1.0
+            }
+        };
+
+        const difficultyOrder = ['easy', 'normal', 'hard', 'insane', 'devious', 'impossible'];
+        let currentDifficultyIndex = 0;
+        let currentDifficulty = difficulties.easy;
+        let gameStarted = false;
+
+        // Game objects
+        let playerPaddle = { x: 20, y: 250, width: 10, height: 100, dy: 0 };
+        let aiPaddle = { x: 770, y: 250, width: 10, height: 100 };
+        let ball = { x: 400, y: 300, radius: 8, dx: 0, dy: 0, speed: 0 };
+        let playerScore = 0;
+        let aiScore = 0;
+        let survivalTime = 0;
+        let survivalInterval = null;
+
+        // Impossible mode effects
+        let ballParticles = [];
+        let stars = [];
+
+        // Audio context
+        let audioContext = null;
+
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playSound(frequency, duration, type = 'sine') {
+            if (!audioContext) initAudio();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = frequency;
+            oscillator.type = type;
+            
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        function playSwoosh() {
+            if (!audioContext) initAudio();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.3);
+            oscillator.type = 'sawtooth';
+            
+            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+        }
+
+        // Update difficulty display
+        function updateDifficultyDisplay() {
+            const key = difficultyOrder[currentDifficultyIndex];
+            currentDifficulty = difficulties[key];
+            const display = document.getElementById('difficultyDisplay');
+            display.textContent = currentDifficulty.name;
+            display.style.color = currentDifficulty.color;
+        }
+
+        // Cycle difficulty
+        function cycleDifficulty() {
+            if (!gameStarted) {
+                currentDifficultyIndex = (currentDifficultyIndex + 1) % difficultyOrder.length;
+                updateDifficultyDisplay();
+                playSound(400 + currentDifficultyIndex * 100, 0.1);
+            }
+        }
+
+        // Apply theme colors
+        function applyTheme() {
+            const color = currentDifficulty.color;
+            
+            if (currentDifficulty.name === 'IMPOSSIBLE') {
+                canvas.style.borderColor = '#ffffff';
+                canvas.style.boxShadow = '0 0 30px rgba(255, 255, 255, 0.5)';
+                document.getElementById('impossibleEffects').style.display = 'block';
+                document.getElementById('survivalTimer').style.display = 'block';
+                generateStars();
+            } else {
+                canvas.style.borderColor = color;
+                canvas.style.boxShadow = `0 0 30px ${color}`;
+                document.getElementById('impossibleEffects').style.display = 'none';
+                document.getElementById('survivalTimer').style.display = 'none';
+            }
+            
+            const scoreboard = document.getElementById('scoreboard');
+            scoreboard.style.color = color;
+            
+            const badge = document.getElementById('difficultyBadge');
+            badge.textContent = currentDifficulty.name;
+            badge.style.color = color;
+            badge.style.borderColor = color;
+            badge.style.boxShadow = `0 0 15px ${color}`;
+        }
+
+        // Generate stars for impossible mode
+        function generateStars() {
+            const container = document.getElementById('impossibleEffects');
+            for (let i = 0; i < 200; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = Math.random() * window.innerWidth + 'px';
+                star.style.top = Math.random() * window.innerHeight + 'px';
+                star.style.animationDelay = Math.random() * 3 + 's';
+                container.appendChild(star);
+                stars.push(star);
+            }
+        }
+
+        // Start game
+        function startGame() {
+            document.getElementById('difficultySelector').style.display = 'none';
+            document.getElementById('scoreboard').style.display = 'flex';
+            document.getElementById('difficultyBadge').style.display = 'block';
+            gameStarted = true;
+            applyTheme();
+            
+            if (currentDifficulty.name === 'IMPOSSIBLE') {
+                survivalTime = 0;
+                survivalInterval = setInterval(() => {
+                    survivalTime += 0.1;
+                    document.getElementById('survivalTimer').textContent = 
+                        `SURVIVED: ${survivalTime.toFixed(1)}s`;
+                }, 100);
+            }
+            
+            resetBall();
+            gameLoop();
+        }
+
+        // Reset ball
+        function resetBall() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.speed = currentDifficulty.ballSpeed;
+            const angle = (Math.random() - 0.5) * Math.PI / 4;
+            ball.dx = ball.speed * Math.cos(angle) * (Math.random() > 0.5 ? 1 : -1);
+            ball.dy = ball.speed * Math.sin(angle);
+        }
+
+        // Create particle for impossible mode
+        function createParticle() {
+            return {
+                x: ball.x,
+                y: ball.y,
+                angle: Math.random() * Math.PI * 2,
+                distance: 0,
+                speed: Math.random() * 2 + 1,
+                life: 1.0,
+                size: Math.random() * 3 + 1
+            };
+        }
+
+        // Draw everything
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // IMPOSSIBLE MODE EFFECTS
+            if (currentDifficulty.name === 'IMPOSSIBLE') {
+                // Create new particles
+                for (let i = 0; i < 3; i++) {
+                    ballParticles.push(createParticle());
+                }
+
+                // Draw and update particles orbiting the ball
+                ctx.save();
+                ballParticles = ballParticles.filter(p => {
+                    p.distance += p.speed;
+                    p.life -= 0.02;
+                    
+                    if (p.life <= 0) return false;
+
+                    const x = ball.x + Math.cos(p.angle + p.distance * 0.1) * (20 + p.distance);
+                    const y = ball.y + Math.sin(p.angle + p.distance * 0.1) * (20 + p.distance);
+
+                    ctx.globalAlpha = p.life;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(x, y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    return true;
+                });
+                ctx.restore();
+
+                // Draw gravitational distortion rings
+                for (let i = 1; i <= 3; i++) {
+                    ctx.beginPath();
+                    ctx.arc(ball.x, ball.y, 15 * i, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(138, 43, 226, ${0.3 / i})`;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                // Draw accretion disk effect
+                const gradient = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, 40);
+                gradient.addColorStop(0, 'transparent');
+                gradient.addColorStop(0.5, 'rgba(138, 43, 226, 0.2)');
+                gradient.addColorStop(1, 'transparent');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, 40, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Draw center line
+            ctx.strokeStyle = currentDifficulty.color;
+            ctx.globalAlpha = 0.3;
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 1;
+
+            // Draw paddles
+            ctx.fillStyle = currentDifficulty.color;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = currentDifficulty.color;
+            ctx.fillRect(playerPaddle.x, playerPaddle.y, playerPaddle.width, playerPaddle.height);
+            ctx.fillRect(aiPaddle.x, aiPaddle.y, aiPaddle.width, aiPaddle.height);
+
+            // Draw ball
+            if (currentDifficulty.name === 'IMPOSSIBLE') {
+                // Ball trail effect
+                ctx.globalAlpha = 0.4;
+                for (let i = 0; i < 8; i++) {
+                    ctx.beginPath();
+                    ctx.arc(ball.x - ball.dx * i * 2, ball.y - ball.dy * i * 2, ball.radius - i * 0.5, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255, 255, 255, ${1 - i / 8})`;
+                    ctx.fill();
+                }
+                ctx.globalAlpha = 1;
+
+                // Main ball with void effect
+                const voidGradient = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, ball.radius * 3);
+                voidGradient.addColorStop(0, '#000000');
+                voidGradient.addColorStop(0.3, '#8b00ff');
+                voidGradient.addColorStop(0.6, '#ffffff');
+                voidGradient.addColorStop(1, 'transparent');
+                ctx.fillStyle = voidGradient;
+                ctx.shadowBlur = 40;
+                ctx.shadowColor = '#8b00ff';
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, ball.radius * 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Event horizon
+                ctx.fillStyle = '#000000';
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.fillStyle = currentDifficulty.color;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = currentDifficulty.color;
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.shadowBlur = 0;
+        }
+
+        // Update game state
+        function update() {
+            // Move player paddle
+            playerPaddle.y += playerPaddle.dy;
+            playerPaddle.y = Math.max(0, Math.min(canvas.height - playerPaddle.height, playerPaddle.y));
+
+            // AI movement
+            const targetY = ball.y - aiPaddle.height / 2;
+            const aiError = (Math.random() - 0.5) * aiPaddle.height * currentDifficulty.aiError;
+            const shouldReact = Math.random() < currentDifficulty.aiReaction;
+            
+            if (shouldReact && ball.dx > 0) {
+                if (aiPaddle.y + aiPaddle.height / 2 < targetY + aiError) {
+                    aiPaddle.y += currentDifficulty.aiSpeed;
+                } else if (aiPaddle.y + aiPaddle.height / 2 > targetY + aiError) {
+                    aiPaddle.y -= currentDifficulty.aiSpeed;
+                }
+            }
+            
+            aiPaddle.y = Math.max(0, Math.min(canvas.height - aiPaddle.height, aiPaddle.y));
+
+            // Move ball
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            // Ball collision with top/bottom
+            if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
+                ball.dy *= -1;
+                playSound(300, 0.1);
+            }
+
+            // Ball collision with player paddle
+            if (ball.x - ball.radius < playerPaddle.x + playerPaddle.width &&
+                ball.x + ball.radius > playerPaddle.x &&
+                ball.y > playerPaddle.y &&
+                ball.y < playerPaddle.y + playerPaddle.height) {
+                
+                const hitPos = (ball.y - playerPaddle.y) / playerPaddle.height - 0.5;
+                ball.dx = Math.abs(ball.dx) * currentDifficulty.ballAccel;
+                ball.dy = hitPos * 8;
+                ball.x = playerPaddle.x + playerPaddle.width + ball.radius;
+                playSound(500, 0.15);
+            }
+
+            // Ball collision with AI paddle
+            if (ball.x + ball.radius > aiPaddle.x &&
+                ball.x - ball.radius < aiPaddle.x + aiPaddle.width &&
+                ball.y > aiPaddle.y &&
+                ball.y < aiPaddle.y + aiPaddle.height) {
+                
+                const hitPos = (ball.y - aiPaddle.y) / aiPaddle.height - 0.5;
+                ball.dx = -Math.abs(ball.dx) * currentDifficulty.ballAccel;
+                ball.dy = hitPos * 8;
+                ball.x = aiPaddle.x - ball.radius;
+                
+                if (currentDifficulty.name === 'IMPOSSIBLE') {
+                    playSwoosh();
+                } else {
+                    playSound(500, 0.15);
+                }
+            }
+
+            // Score points
+            if (ball.x - ball.radius < 0) {
+                aiScore++;
+                document.getElementById('aiScore').textContent = aiScore;
+                playSound(200, 0.3, 'square');
+                
+                // In IMPOSSIBLE mode, game never ends
+                if (currentDifficulty.name !== 'IMPOSSIBLE' && aiScore >= 11) {
+                    endGame(false);
+                } else {
+                    resetBall();
+                }
+            }
+
+            if (ball.x + ball.radius > canvas.width) {
+                playerScore++;
+                document.getElementById('playerScore').textContent = playerScore;
+                playSound(800, 0.3, 'square');
+                
+                if (playerScore >= 11) {
+                    endGame(true);
+                } else {
+                    resetBall();
+                }
+            }
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (gameStarted) {
+                update();
+                draw();
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // End game
+        function endGame(playerWon) {
+            gameStarted = false;
+            if (survivalInterval) {
+                clearInterval(survivalInterval);
+            }
+            
+            const gameOverScreen = document.getElementById('gameOver');
+            const title = document.getElementById('gameOverTitle');
+            const result = document.getElementById('gameResult');
+            const color = currentDifficulty.color;
+            
+            gameOverScreen.style.borderColor = color;
+            gameOverScreen.style.boxShadow = `0 0 40px ${color}`;
+            title.style.color = color;
+            result.style.color = color;
+            gameOverScreen.querySelector('button').style.color = color;
+            gameOverScreen.querySelector('button').style.borderColor = color;
+            
+            if (currentDifficulty.name === 'IMPOSSIBLE') {
+                title.textContent = 'THE VOID CONSUMED YOU';
+                result.textContent = `You survived ${survivalTime.toFixed(1)} seconds`;
+            } else if (playerWon) {
+                title.textContent = 'VICTORY!';
+                result.textContent = `You defeated the AI at ${currentDifficulty.name} difficulty!`;
+            } else {
+                title.textContent = 'DEFEAT';
+                result.textContent = `The AI won at ${currentDifficulty.name} difficulty`;
+            }
+            
+            gameOverScreen.style.display = 'block';
+        }
+
+        // Back to menu
+        function backToMenu() {
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('scoreboard').style.display = 'none';
+            document.getElementById('difficultyBadge').style.display = 'none';
+            document.getElementById('difficultySelector').style.display = 'block';
+            document.getElementById('impossibleEffects').style.display = 'none';
+            document.getElementById('survivalTimer').style.display = 'none';
+            
+            // Reset scores
+            playerScore = 0;
+            aiScore = 0;
+            document.getElementById('playerScore').textContent = '0';
+            document.getElementById('aiScore').textContent = '0';
+            
+            // Clear effects
+            ballParticles = [];
+            stars.forEach(star => star.remove());
+            stars = [];
+        }
+
+        // Controls
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (!gameStarted) {
+                    cycleDifficulty();
+                }
+            }
+            
+            if (gameStarted) {
+                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+                    playerPaddle.dy = -currentDifficulty.paddleSpeed;
+                } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+                    playerPaddle.dy = currentDifficulty.paddleSpeed;
+                }
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (gameStarted) {
+                if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || 
+                    e.key === 'w' || e.key === 'W' || e.key === 's' || e.key === 'S') {
+                    playerPaddle.dy = 0;
+                }
+            }
+        });
+
+        // Initialize
+        updateDifficultyDisplay();
+    </script>
+</body>
+</html>

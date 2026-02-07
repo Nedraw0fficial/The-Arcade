@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>- Arcade Library -</title>
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/main.css">
+    
+    <!-- Favicon (you can add a custom one later) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🎲</text></svg>">
+    
+    <!-- Meta tags for sharing -->
+    <meta name="description" content="A beautiful retro-styled arcade game library with VHS effects, neon aesthetics, and classic gameplay">
+    <meta property="og:title" content="RETRO ARCADE - Game Library">
+    <meta property="og:description" content="Step into the neon-lit arcade of retro gaming">
+    <meta property="og:type" content="website">
+</head>
+<body>
+    <!-- Main container -->
+    <div class="arcade-container">
+        <!-- Header section -->
+        <header class="arcade-header">
+            <h1 class="arcade-title">RETRO ARCADE</h1>
+            <p class="arcade-subtitle">SELECT YOUR GAME</p>
+        </header>
+
+        <!-- Games grid - dynamically populated by hub.js -->
+        <div id="games-grid" class="games-grid">
+            <!-- Game cards will be generated here -->
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/games.js"></script>
+    <script src="js/effects.js"></script>
+    <script src="js/hub.js"></script>
+</body>
+</html>

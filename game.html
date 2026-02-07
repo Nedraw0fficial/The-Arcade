@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game - RETRO ARCADE</title>
+    
+    <link rel="stylesheet" href="css/main.css">
+    
+    <style>
+        /* Remove ALL default margins/padding */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        /* Game page specific styles */
+        .game-page-container {
+            max-width: 100%;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: rgba(20, 20, 40, 0.95);
+            border-bottom: 2px solid var(--neon-cyan);
+            flex-shrink: 0;
+            z-index: 100;
+        }
+
+        .game-title-display {
+            font-size: clamp(0.8rem, 2vw, 1.5rem);
+            color: #fff;
+            text-shadow: 0 0 8px var(--neon-pink), 1px 1px 2px rgba(0, 0, 0, 0.8);
+            letter-spacing: 0.1em;
+        }
+
+        .back-button {
+            padding: 10px 20px;
+            background: transparent;
+            border: 2px solid var(--neon-cyan);
+            color: var(--neon-cyan);
+            font-family: 'Press Start 2P', monospace;
+            font-size: 0.6rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+            letter-spacing: 0.1em;
+        }
+
+        .back-button:hover {
+            background: var(--neon-cyan);
+            color: var(--dark-bg);
+            box-shadow: 0 0 15px var(--neon-cyan);
+            transform: scale(1.05);
+        }
+
+        .game-container {
+            flex: 1;
+            position: relative;
+            background: var(--dark-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+        }
+
+        .game-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: var(--dark-bg);
+            display: block;
+            transform: scale(1.2);
+            transform-origin: center center;
+        }
+
+        @media (min-width: 1400px) {
+            .game-frame {
+                transform: scale(1.4);
+            }
+        }
+
+        @media (min-width: 1920px) {
+            .game-frame {
+                transform: scale(1.6);
+            }
+        }
+
+        .loading-screen {
+            text-align: center;
+            color: var(--neon-cyan);
+        }
+
+        .loading-text {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            animation: loadingPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes loadingPulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .loading-bar {
+            width: 200px;
+            height: 20px;
+            border: 2px solid var(--neon-cyan);
+            margin: 0 auto;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .loading-bar-fill {
+            height: 100%;
+            background: var(--neon-cyan);
+            box-shadow: 0 0 10px var(--neon-cyan);
+            animation: loadingFill 2s ease-in-out infinite;
+        }
+
+        @keyframes loadingFill {
+            0% { width: 0%; }
+            50% { width: 100%; }
+            100% { width: 0%; }
+        }
+
+        .game-info-display {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            padding: 12px 15px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid var(--neon-green);
+            border-radius: 4px;
+            font-size: 0.6rem;
+            color: var(--neon-green);
+            text-shadow: 0 0 5px var(--neon-green);
+            max-width: 300px;
+        }
+
+        .error-message {
+            text-align: center;
+            color: #ff3333;
+            font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-page-container">
+        <!-- Header with back button and game title -->
+        <div class="game-header">
+            <h2 class="game-title-display" id="game-title">LOADING...</h2>
+            <a href="index.html" class="back-button">← BACK TO ARCADE</a>
+        </div>
+
+        <!-- Game container -->
+        <div class="game-container">
+            <div class="loading-screen" id="loading-screen">
+                <div class="loading-text">LOADING GAME...</div>
+                <div class="loading-bar">
+                    <div class="loading-bar-fill"></div>
+                </div>
+            </div>
+            
+            <iframe id="game-frame" class="game-frame" style="display: none;"></iframe>
+            
+            <div class="error-message" id="error-message" style="display: none;">
+                GAME NOT FOUND
+            </div>
+
+            <div class="game-info-display" id="game-info" style="display: none;">
+                <div id="game-description"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/games.js"></script>
+    <script src="js/effects.js"></script>
+    <script>
+        // Initialize effects
+        const effects = new RetroEffects();
+
+        // Get game ID from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const gameId = urlParams.get('id');
+
+        // Load the game
+        if (gameId) {
+            const game = getGameById(gameId);
+            
+            if (game) {
+                // Update title
+                document.getElementById('game-title').textContent = game.title;
+                document.title = `${game.title} - RETRO ARCADE`;
+
+                // Update info
+                const gameInfo = document.getElementById('game-info');
+                const gameDescription = document.getElementById('game-description');
+                gameDescription.textContent = game.description;
+
+                // Load game in iframe
+                const gameFrame = document.getElementById('game-frame');
+                const loadingScreen = document.getElementById('loading-screen');
+
+                gameFrame.src = game.path;
+
+                // Show game when loaded
+                gameFrame.onload = function() {
+                    setTimeout(() => {
+                        loadingScreen.style.display = 'none';
+                        gameFrame.style.display = 'block';
+                        gameInfo.style.display = 'block';
+                    }, 500);
+                };
+
+                // Handle load errors
+                gameFrame.onerror = function() {
+                    loadingScreen.style.display = 'none';
+                    document.getElementById('error-message').style.display = 'block';
+                };
+            } else {
+                // Game not found
+                document.getElementById('loading-screen').style.display = 'none';
+                document.getElementById('error-message').style.display = 'block';
+                document.getElementById('game-title').textContent = 'ERROR';
+            }
+        } else {
+            // No game ID provided
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('error-message').style.display = 'block';
+            document.getElementById('game-title').textContent = 'NO GAME SELECTED';
+        }
+
+        // Add glitch effect to title
+        const titleElement = document.getElementById('game-title');
+        setTimeout(() => {
+            glitchEffect(titleElement, 300);
+        }, 1000);
+    </script>
+</body>
+</html>
