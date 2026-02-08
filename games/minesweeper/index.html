@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Minesweeper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            background: #0a0a0f;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Courier New', monospace;
+        }
+
+        .game-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .difficulty-selector {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.7);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 50px 80px;
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.6);
+            text-align: center;
+            z-index: 200;
+            border-radius: 8px;
+        }
+
+        .difficulty-selector h2 {
+            font-size: 28px;
+            margin-bottom: 30px;
+            color: #00ff00;
+            text-shadow: 0 0 15px #00ff00;
+        }
+
+        .difficulty-display {
+            font-size: 36px;
+            margin: 30px 0;
+            text-shadow: 0 0 20px currentColor;
+            font-weight: bold;
+            letter-spacing: 0.1em;
+        }
+
+        .difficulty-info {
+            font-size: 14px;
+            color: #888;
+            margin-top: 15px;
+            line-height: 1.6;
+        }
+
+        .start-button {
+            background: transparent;
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            padding: 15px 40px;
+            font-size: 16px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            margin-top: 30px;
+            transition: all 0.3s;
+            text-shadow: 0 0 5px #00ff00;
+        }
+
+        .start-button:hover {
+            background: #00ff00;
+            color: #000;
+            box-shadow: 0 0 20px #00ff00;
+            transform: scale(1.05);
+        }
+
+        .info-bar {
+            position: fixed;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%) scale(0.8);
+            display: flex;
+            gap: 60px;
+            font-size: 20px;
+            z-index: 100;
+            text-shadow: 0 0 10px currentColor;
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .difficulty-badge {
+            position: fixed;
+            top: 25%;
+            left: 50%;
+            transform: translateX(-50%) scale(0.8);
+            font-size: 18px;
+            padding: 8px 20px;
+            border: 2px solid;
+            border-radius: 4px;
+            z-index: 100;
+            text-shadow: 0 0 10px currentColor;
+            box-shadow: 0 0 15px currentColor;
+        }
+
+        canvas {
+            border: 3px solid;
+            box-shadow: 0 0 30px;
+            background: #000;
+            display: block;
+            cursor: crosshair;
+        }
+
+        .game-over {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.7);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 50px 80px;
+            border: 3px solid;
+            box-shadow: 0 0 40px;
+            display: none;
+            text-align: center;
+            z-index: 200;
+            border-radius: 8px;
+        }
+
+        .game-over h2 {
+            font-size: 32px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 20px currentColor;
+        }
+
+        .game-over .result {
+            font-size: 20px;
+            margin-bottom: 30px;
+            text-shadow: 0 0 15px currentColor;
+        }
+
+        .game-over button {
+            background: transparent;
+            border: 2px solid;
+            padding: 15px 40px;
+            font-size: 16px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            transition: all 0.3s;
+            text-shadow: 0 0 5px currentColor;
+            margin: 0 10px;
+        }
+
+        .game-over button:hover {
+            transform: scale(1.05);
+        }
+
+        .particle-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+            display: none;
+            background: transparent !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="difficulty-selector" id="difficultySelector">
+        <h2>SELECT DIFFICULTY</h2>
+        <div class="difficulty-display" id="difficultyDisplay">EASY</div>
+        <div class="difficulty-info">Press SPACE to cycle | Click START to begin</div>
+        <button class="start-button" onclick="startGame()">START GAME</button>
+    </div>
+
+    <div class="game-container">
+        <div class="info-bar" id="infoBar" style="display: none;">
+            <div class="info-item">
+                <span>MINES:</span>
+                <span id="mineCount">0</span>
+            </div>
+            <div class="info-item">
+                <span>FLAGS:</span>
+                <span id="flagCount">0</span>
+            </div>
+            <div class="info-item">
+                <span>TIME:</span>
+                <span id="timer">0</span>
+            </div>
+        </div>
+        <div class="difficulty-badge" id="difficultyBadge" style="display: none;"></div>
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <canvas class="particle-overlay" id="particleCanvas"></canvas>
+
+    <div class="game-over" id="gameOver">
+        <h2 id="gameOverTitle">GAME OVER</h2>
+        <div class="result" id="gameResult"></div>
+        <button onclick="restartGame()">RESTART</button>
+        <button onclick="backToMenu()">MENU</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const particleCanvas = document.getElementById('particleCanvas');
+        const particleCtx = particleCanvas.getContext('2d');
+
+        // Set particle canvas to ACTUAL viewport size
+        function resizeParticleCanvas() {
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+        }
+        resizeParticleCanvas();
+        window.addEventListener('resize', resizeParticleCanvas);
+
+        // Difficulty settings
+        const difficulties = {
+            easy: {
+                name: 'EASY',
+                color: '#00ff00',
+                rows: 9,
+                cols: 9,
+                mines: 10
+            },
+            medium: {
+                name: 'MEDIUM',
+                color: '#ffff00',
+                rows: 16,
+                cols: 16,
+                mines: 40
+            },
+            hard: {
+                name: 'HARD',
+                color: '#ff0000',
+                rows: 16,
+                cols: 30,
+                mines: 99
+            },
+            nullzone: {
+                name: 'NULLZONE',
+                color: '#ffffff',
+                rows: 16,
+                cols: 30,
+                mines: 200
+            }
+        };
+
+        const difficultyOrder = ['easy', 'medium', 'hard', 'nullzone'];
+        let currentDifficultyIndex = 0;
+        let currentDifficulty = difficulties.easy;
+        let gameStarted = false;
+
+        // Game state
+        let grid = [];
+        let cellSize = 30;
+        let flagsPlaced = 0;
+        let cellsRevealed = 0;
+        let gameOver = false;
+        let gameWon = false;
+        let timer = 0;
+        let timerInterval = null;
+        let firstClick = true;
+        let explosionParticles = [];
+        let animationFrame = null;
+
+        // Audio
+        let audioContext = null;
+
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playSound(frequency, duration, type = 'sine') {
+            if (!audioContext) initAudio();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = frequency;
+            oscillator.type = type;
+            
+            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        function playExplosion() {
+            if (!audioContext) initAudio();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
+            
+            oscillator.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.3);
+            oscillator.type = 'sawtooth';
+            
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(2000, audioContext.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.3);
+            
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+        }
+
+        // Update difficulty display
+        function updateDifficultyDisplay() {
+            const key = difficultyOrder[currentDifficultyIndex];
+            currentDifficulty = difficulties[key];
+            const display = document.getElementById('difficultyDisplay');
+            display.textContent = currentDifficulty.name;
+            display.style.color = currentDifficulty.color;
+        }
+
+        // Cycle difficulty
+        function cycleDifficulty() {
+            if (!gameStarted) {
+                currentDifficultyIndex = (currentDifficultyIndex + 1) % difficultyOrder.length;
+                updateDifficultyDisplay();
+                playSound(400 + currentDifficultyIndex * 100, 0.1);
+            }
+        }
+
+        // Apply theme
+        function applyTheme() {
+            const color = currentDifficulty.color;
+            
+            canvas.style.borderColor = color;
+            canvas.style.boxShadow = `0 0 30px ${color}`;
+            
+            const infoBar = document.getElementById('infoBar');
+            infoBar.style.color = color;
+            
+            const badge = document.getElementById('difficultyBadge');
+            badge.textContent = currentDifficulty.name;
+            badge.style.color = color;
+            badge.style.borderColor = color;
+            badge.style.boxShadow = `0 0 15px ${color}`;
+        }
+
+        // Start game
+        function startGame() {
+            document.getElementById('difficultySelector').style.display = 'none';
+            document.getElementById('infoBar').style.display = 'flex';
+            document.getElementById('difficultyBadge').style.display = 'block';
+            gameStarted = true;
+            applyTheme();
+            
+            initGrid();
+            draw();
+            
+            timerInterval = setInterval(() => {
+                timer++;
+                document.getElementById('timer').textContent = timer;
+            }, 1000);
+        }
+
+        // Initialize grid (without mines)
+        function initGrid() {
+            const rows = currentDifficulty.rows;
+            const cols = currentDifficulty.cols;
+            
+            canvas.width = cols * cellSize;
+            canvas.height = rows * cellSize;
+            
+            grid = [];
+            for (let row = 0; row < rows; row++) {
+                grid[row] = [];
+                for (let col = 0; col < cols; col++) {
+                    grid[row][col] = {
+                        mine: false,
+                        revealed: false,
+                        flagged: false,
+                        neighborMines: 0
+                    };
+                }
+            }
+            
+            document.getElementById('mineCount').textContent = currentDifficulty.mines;
+            document.getElementById('flagCount').textContent = 0;
+            document.getElementById('timer').textContent = 0;
+            flagsPlaced = 0;
+            cellsRevealed = 0;
+            timer = 0;
+            firstClick = true;
+        }
+
+        // Place mines AFTER first click
+        function placeMines(excludeRow, excludeCol) {
+            let minesPlaced = 0;
+            while (minesPlaced < currentDifficulty.mines) {
+                const row = Math.floor(Math.random() * currentDifficulty.rows);
+                const col = Math.floor(Math.random() * currentDifficulty.cols);
+                
+                // Don't place mine on first click or its neighbors
+                if (Math.abs(row - excludeRow) <= 1 && Math.abs(col - excludeCol) <= 1) {
+                    continue;
+                }
+                
+                if (!grid[row][col].mine) {
+                    grid[row][col].mine = true;
+                    minesPlaced++;
+                }
+            }
+            
+            // Calculate neighbor mines
+            for (let row = 0; row < currentDifficulty.rows; row++) {
+                for (let col = 0; col < currentDifficulty.cols; col++) {
+                    if (!grid[row][col].mine) {
+                        grid[row][col].neighborMines = countNeighborMines(row, col);
+                    }
+                }
+            }
+        }
+
+        // Count neighbor mines
+        function countNeighborMines(row, col) {
+            let count = 0;
+            for (let r = row - 1; r <= row + 1; r++) {
+                for (let c = col - 1; c <= col + 1; c++) {
+                    if (r >= 0 && r < currentDifficulty.rows && 
+                        c >= 0 && c < currentDifficulty.cols && 
+                        grid[r][c].mine) {
+                        count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        // Reveal cell
+        function revealCell(row, col) {
+            if (row < 0 || row >= currentDifficulty.rows || 
+                col < 0 || col >= currentDifficulty.cols ||
+                grid[row][col].revealed || grid[row][col].flagged) {
+                return;
+            }
+            
+            // First click - place mines
+            if (firstClick) {
+                placeMines(row, col);
+                firstClick = false;
+            }
+            
+            grid[row][col].revealed = true;
+            cellsRevealed++;
+            playSound(600, 0.05);
+            
+            if (grid[row][col].mine) {
+                gameOver = true;
+                triggerExplosions();
+                return;
+            }
+            
+            if (grid[row][col].neighborMines === 0) {
+                // Reveal neighbors
+                for (let r = row - 1; r <= row + 1; r++) {
+                    for (let c = col - 1; c <= col + 1; c++) {
+                        revealCell(r, c);
+                    }
+                }
+            }
+            
+            checkWin();
+        }
+
+        // Check win condition
+        function checkWin() {
+            const totalCells = currentDifficulty.rows * currentDifficulty.cols;
+            if (cellsRevealed === totalCells - currentDifficulty.mines) {
+                gameWon = true;
+                gameOver = true;
+                clearInterval(timerInterval);
+                playSound(800, 0.5, 'square');
+                setTimeout(() => endGame(), 500);
+            }
+        }
+
+        // Trigger mine explosions
+        function triggerExplosions() {
+            clearInterval(timerInterval);
+            particleCanvas.style.display = 'block';
+            explosionParticles = []; // Clear old particles
+            
+            // Find all mines
+            const mines = [];
+            for (let row = 0; row < currentDifficulty.rows; row++) {
+                for (let col = 0; col < currentDifficulty.cols; col++) {
+                    if (grid[row][col].mine) {
+                        mines.push({ row, col });
+                    }
+                }
+            }
+            
+            // Shuffle
+            for (let i = mines.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [mines[i], mines[j]] = [mines[j], mines[i]];
+            }
+            
+            // Start animation FIRST
+            let animRunning = false;
+            let lastTime = performance.now();
+
+            function simpleAnimate(currentTime) {
+                if(!animRunning) {
+                    animRunning = true;
+                    lastTime = currentTime;
+                }
+                
+                // Calculate deltaTime in seconds
+                const deltaTime = (currentTime - lastTime) / 1000;
+                lastTime = currentTime;
+                
+                particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+
+                draw();
+                
+                let alive = 0;
+                for(let i = 0; i < explosionParticles.length; i++) {
+                    const p = explosionParticles[i];
+                    if (p.life > 0) {
+                        // Apply movement based on deltaTime (60 FPS as baseline)
+                        p.x += p.vx * deltaTime * 60;
+                        p.y += p.vy * deltaTime * 60;
+                        p.vy += 0.2 * deltaTime * 60; // gravity
+                        p.life -= 0.01 * deltaTime * 60; // decay
+                        
+                        particleCtx.shadowBlur = 20;
+                        particleCtx.shadowColor = p.color;
+                        particleCtx.fillStyle = p.color;
+                        particleCtx.fillRect(p.x - 3, p.y - 3, 6, 6); // smaller squares
+                        alive++;
+                    }
+                }
+                
+                if (animRunning) {
+                    requestAnimationFrame(simpleAnimate);
+                }
+            }
+
+            simpleAnimate(performance.now()); // Start with initial timestamp
+            
+            // NOW explode mines and ADD particles to the running animation
+            mines.forEach((mine, index) => {
+                setTimeout(() => {
+                    grid[mine.row][mine.col].revealed = true;
+                    draw();
+                    
+                    const rect = canvas.getBoundingClientRect();
+                    const cellX = mine.col * cellSize + cellSize / 2;
+                    const cellY = mine.row * cellSize + cellSize / 2;
+                    const scaleX = rect.width / canvas.width;
+                    const scaleY = rect.height / canvas.height;
+                    const screenX = rect.left + (cellX * scaleX);
+                    const screenY = rect.top + (cellY * scaleY);
+                    
+                    console.log('BOOM at', screenX, screenY);
+                    
+                    // Add particles to the EXISTING array
+                    for (let i = 0; i < 30; i++) { // CHANGE FROM 50 TO 30
+                        const angle = (Math.PI * 2 * i) / 30 + (Math.random() - 0.5) * 0.5; // CHANGE TO 30
+                        const speed = 2 + Math.random() * 4; // CHANGE FROM 3-6 to 2-4
+                        const colors = ['#ff0000', '#ff6600', '#ffaa00', '#ffff00'];
+                        
+                        explosionParticles.push({
+                            x: screenX,
+                            y: screenY,
+                            vx: Math.cos(angle) * speed,
+                            vy: Math.sin(angle) * speed,
+                            life: 1.0,
+                            size: 6, // CHANGE FROM 10 TO 6
+                            color: colors[Math.floor(Math.random() * colors.length)]
+                        });
+                    }
+                    
+                    playExplosion();
+                    
+                    if (index === mines.length - 1) {
+                        setTimeout(() => {
+                            animRunning = false;
+                            endGame();
+                        }, 1500);
+                    }
+                }, index * 120);
+            });
+        }
+
+        // Create explosion particles - FIXED POSITIONING
+        function createExplosion(col, row) {
+            // Get cell CENTER in canvas pixels
+            const canvasCenterX = col * cellSize + cellSize / 2;
+            const canvasCenterY = row * cellSize + cellSize / 2;
+            
+            // Get canvas position and size
+            const rect = canvas.getBoundingClientRect();
+            
+            // Map canvas pixel to screen pixel
+            const scaleX = rect.width / canvas.width;
+            const scaleY = rect.height / canvas.height;
+            
+            // SIMPLE: just add rect position to scaled canvas position
+            const screenX = rect.left + (canvasCenterX * scaleX);
+            const screenY = rect.top + (canvasCenterY * scaleY);
+            
+            // BUT WAIT - we need to account for PAGE SCROLL
+            const finalX = screenX + window.scrollX;
+            const finalY = screenY + window.scrollY;
+            
+            console.log(`Mine (${col},${row}) -> Canvas(${canvasCenterX},${canvasCenterY}) -> Screen(${screenX},${screenY}) -> Final(${finalX},${finalY})`);
+            console.log(`Rect: left=${rect.left}, top=${rect.top}, width=${rect.width}, scale=${scaleX}`);
+            
+            const particleCount = 60;
+            for (let i = 0; i < particleCount; i++) {
+                const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.8;
+                const speed = 3 + Math.random() * 8;
+                const colors = ['#ff0000', '#ff3300', '#ff6600', '#ff8800', '#ffaa00', '#ffff00'];
+                
+                explosionParticles.push({
+                    x: screenX,  // Use screenX, NOT finalX (no scroll in fullscreen game)
+                    y: screenY,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 1.0,
+                    size: 8 + Math.random() * 6,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    rotation: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 0.3
+                });
+            }
+        }
+
+        // Animate particles with effects
+        function animateParticles() {
+            if (explosionParticles.length === 0) {
+                particleCanvas.style.display = 'none';
+                return;
+            }
+            
+            // Fade background
+            particleCtx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+            particleCtx.fillRect(0, 0, particleCanvas.width, particleCanvas.height);
+            
+            explosionParticles = explosionParticles.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.25; // Gravity
+                p.vx *= 0.98;
+                p.rotation += p.rotSpeed;
+                p.life -= 0.012;
+                
+                if (p.life <= 0 || p.y > window.innerHeight + 100) return false;
+                
+                // Outer glow
+                particleCtx.save();
+                particleCtx.globalAlpha = p.life * 0.4;
+                particleCtx.fillStyle = p.color;
+                particleCtx.shadowBlur = 30;
+                particleCtx.shadowColor = p.color;
+                particleCtx.beginPath();
+                particleCtx.arc(p.x, p.y, p.size * 3, 0, Math.PI * 2);
+                particleCtx.fill();
+                particleCtx.restore();
+                
+                // Main particle
+                particleCtx.save();
+                particleCtx.globalAlpha = p.life;
+                particleCtx.fillStyle = p.color;
+                particleCtx.shadowBlur = 20;
+                particleCtx.shadowColor = p.color;
+                particleCtx.translate(p.x, p.y);
+                particleCtx.rotate(p.rotation);
+                particleCtx.fillRect(-p.size, -p.size, p.size * 2, p.size * 2);
+                particleCtx.restore();
+                
+                // Bright center
+                particleCtx.save();
+                particleCtx.globalAlpha = p.life * 0.8;
+                particleCtx.fillStyle = '#ffffff';
+                particleCtx.shadowBlur = 15;
+                particleCtx.shadowColor = '#ffffff';
+                particleCtx.beginPath();
+                particleCtx.arc(p.x, p.y, p.size * 0.4, 0, Math.PI * 2);
+                particleCtx.fill();
+                particleCtx.restore();
+                
+                return true;
+            });
+            
+            requestAnimationFrame(animateParticles);
+        }
+        // Draw retro mine
+        function drawMine(x, y, size) {
+            const centerX = x + cellSize / 2;
+            const centerY = y + cellSize / 2;
+            
+            // Mine body
+            ctx.fillStyle = '#ff0000';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#ff0000';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, size, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Spikes
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 3;
+            for (let i = 0; i < 8; i++) {
+                const angle = (Math.PI * 2 * i) / 8;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(
+                    centerX + Math.cos(angle) * (size + 6),
+                    centerY + Math.sin(angle) * (size + 6)
+                );
+                ctx.stroke();
+            }
+            
+            ctx.shadowBlur = 0;
+        }
+
+        // Draw retro flag
+        function drawFlag(x, y) {
+            const baseX = x + cellSize / 2;
+            const baseY = y + cellSize / 2;
+            
+            // Pole
+            ctx.strokeStyle = currentDifficulty.color;
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = currentDifficulty.color;
+            ctx.beginPath();
+            ctx.moveTo(baseX, baseY + 10);
+            ctx.lineTo(baseX, baseY - 10);
+            ctx.stroke();
+            
+            // Flag
+            ctx.fillStyle = currentDifficulty.color;
+            ctx.beginPath();
+            ctx.moveTo(baseX, baseY - 10);
+            ctx.lineTo(baseX + 10, baseY - 5);
+            ctx.lineTo(baseX, baseY);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.shadowBlur = 0;
+        }
+
+        // Draw grid
+        function draw() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            for (let row = 0; row < currentDifficulty.rows; row++) {
+                for (let col = 0; col < currentDifficulty.cols; col++) {
+                    const cell = grid[row][col];
+                    const x = col * cellSize;
+                    const y = row * cellSize;
+                    
+                    if (cell.revealed) {
+                        ctx.fillStyle = '#0a0a0f';
+                        ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+                        
+                        if (cell.mine) {
+                            drawMine(x, y, 8);
+                        } else if (cell.neighborMines > 0) {
+                            // Draw number
+                            const colors = ['', currentDifficulty.color, '#ffff00', '#ff8800', 
+                                          '#ff0000', '#ff00ff', '#00ffff', '#ffffff', '#ffffff'];
+                            ctx.fillStyle = colors[cell.neighborMines];
+                            ctx.font = 'bold 18px "Courier New"';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            ctx.shadowBlur = 8;
+                            ctx.shadowColor = colors[cell.neighborMines];
+                            ctx.fillText(cell.neighborMines, x + cellSize / 2, y + cellSize / 2);
+                            ctx.shadowBlur = 0;
+                        }
+                    } else {
+                        // Unrevealed cell
+                        ctx.fillStyle = '#1a1a2e';
+                        ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                        
+                        // Highlight
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                        ctx.fillRect(x + 3, y + 3, cellSize - 6, 2);
+                        
+                        if (cell.flagged) {
+                            drawFlag(x, y);
+                        }
+                    }
+                    
+                    // Grid lines
+                    ctx.strokeStyle = currentDifficulty.color;
+                    ctx.globalAlpha = 0.15;
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x, y, cellSize, cellSize);
+                    ctx.globalAlpha = 1;
+                }
+            }
+        }
+
+        // Mouse handling
+        canvas.addEventListener('mousedown', (e) => {
+            if (gameOver) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scale = canvas.width / rect.width;
+            const x = (e.clientX - rect.left) * scale;
+            const y = (e.clientY - rect.top) * scale;
+            
+            const col = Math.floor(x / cellSize);
+            const row = Math.floor(y / cellSize);
+            
+            if (row < 0 || row >= currentDifficulty.rows || 
+                col < 0 || col >= currentDifficulty.cols) return;
+            
+            if (e.button === 0) { // Left click
+                revealCell(row, col);
+            } else if (e.button === 2) { // Right click
+                if (!grid[row][col].revealed) {
+                    grid[row][col].flagged = !grid[row][col].flagged;
+                    flagsPlaced += grid[row][col].flagged ? 1 : -1;
+                    document.getElementById('flagCount').textContent = flagsPlaced;
+                    playSound(grid[row][col].flagged ? 700 : 500, 0.05);
+                }
+            }
+            
+            draw();
+        });
+
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // End game
+        function endGame() {
+            const gameOverScreen = document.getElementById('gameOver');
+            const title = document.getElementById('gameOverTitle');
+            const result = document.getElementById('gameResult');
+            const color = currentDifficulty.color;
+            
+            gameOverScreen.style.borderColor = color;
+            gameOverScreen.style.boxShadow = `0 0 40px ${color}`;
+            title.style.color = color;
+            result.style.color = color;
+            gameOverScreen.querySelectorAll('button').forEach(btn => {
+                btn.style.color = color;
+                btn.style.borderColor = color;
+            });
+            
+            if (gameWon) {
+                title.textContent = 'FIELD CLEARED!';
+                result.textContent = `You swept the minefield in ${timer} seconds!`;
+            } else {
+                title.textContent = 'DETONATION!';
+                result.textContent = `Mine exploded after ${timer} seconds`;
+            }
+            
+            gameOverScreen.style.display = 'block';
+        }
+
+        // Restart game
+        function restartGame() {
+            document.getElementById('gameOver').style.display = 'none';
+            particleCanvas.style.display = 'none';
+            explosionParticles = [];
+            if (animationFrame) cancelAnimationFrame(animationFrame);
+            clearInterval(timerInterval); // ADD THIS LINE
+            gameOver = false;
+            gameWon = false;
+            initGrid();
+            draw();
+            
+            timer = 0;
+            timerInterval = setInterval(() => {
+                timer++;
+                document.getElementById('timer').textContent = timer;
+            }, 1000);
+        }
+
+        // Back to menu
+        function backToMenu() {
+            document.getElementById('gameOver').style.display = 'none';
+            document.getElementById('infoBar').style.display = 'none';
+            document.getElementById('difficultyBadge').style.display = 'none';
+            document.getElementById('difficultySelector').style.display = 'block';
+            particleCanvas.style.display = 'none';
+            explosionParticles = [];
+            if (animationFrame) cancelAnimationFrame(animationFrame);
+            clearInterval(timerInterval); // ADD THIS LINE
+            gameStarted = false;
+            gameOver = false;
+            gameWon = false;
+        }
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (!gameStarted) {
+                    cycleDifficulty();
+                }
+            }
+        });
+
+        // Initialize
+        updateDifficultyDisplay();
+    </script>
+</body>
+</html>

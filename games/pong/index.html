@@ -93,7 +93,7 @@
 
         .scoreboard {
             position: fixed;
-            top: 10px;
+            top: 27%;
             left: 50%;
             transform: translateX(-50%) scale(0.8);
             display: flex;
@@ -111,7 +111,7 @@
 
         .difficulty-badge {
             position: fixed;
-            top: 90px;
+            top: 20%;
             left: 50%;
             transform: translateX(-50%);
             font-size: 18px;
@@ -321,6 +321,7 @@
         let aiScore = 0;
         let survivalTime = 0;
         let survivalInterval = null;
+        let gameSpeed = 2.0;
 
         // Impossible mode orbital particles
         let orbitParticles = [];
@@ -455,7 +456,8 @@
             applyTheme();
             
             resetBall();
-            gameLoop();
+            lastTime = performance.now(); // Initialize timer
+            gameLoop(performance.now()); // Start with timestamp
         }
 
         // Reset ball
@@ -670,9 +672,11 @@
         }
 
         // Update game state
-        function update() {
+       function update(deltaTime) {
+            const dt = deltaTime * 60 * gameSpeed; // Apply game speed multiplier here
+            
             // Move player paddle
-            playerPaddle.y += playerPaddle.dy;
+            playerPaddle.y += playerPaddle.dy * dt;
             playerPaddle.y = Math.max(0, Math.min(canvas.height - playerPaddle.height, playerPaddle.y));
 
             // AI movement
@@ -682,17 +686,17 @@
             
             if (shouldReact && ball.dx > 0) {
                 if (aiPaddle.y + aiPaddle.height / 2 < targetY + aiError) {
-                    aiPaddle.y += currentDifficulty.aiSpeed;
+                    aiPaddle.y += currentDifficulty.aiSpeed * dt;
                 } else if (aiPaddle.y + aiPaddle.height / 2 > targetY + aiError) {
-                    aiPaddle.y -= currentDifficulty.aiSpeed;
+                    aiPaddle.y -= currentDifficulty.aiSpeed * dt;
                 }
             }
             
             aiPaddle.y = Math.max(0, Math.min(canvas.height - aiPaddle.height, aiPaddle.y));
 
             // Move ball
-            ball.x += ball.dx;
-            ball.y += ball.dy;
+            ball.x += ball.dx * dt;
+            ball.y += ball.dy * dt;
 
             // Ball collision with top/bottom
             if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
@@ -758,9 +762,18 @@
         }
 
         // Game loop
-        function gameLoop() {
+        let lastTime = performance.now();
+
+        function gameLoop(currentTime) {
             if (gameStarted) {
-                update();
+                // Calculate deltaTime in seconds
+                const deltaTime = (currentTime - lastTime) / 1000;
+                lastTime = currentTime;
+                
+                // Cap deltaTime to prevent huge jumps (e.g., when tab loses focus)
+                const clampedDelta = Math.min(deltaTime, 0.1);
+                
+                update(clampedDelta);
                 draw();
                 requestAnimationFrame(gameLoop);
             }

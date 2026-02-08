@@ -23,15 +23,45 @@ const GAMES = [
         releaseDate: '2026-02-07'
     },
     {
-    id: 'pong',
-    title: 'PONG',
-    description: 'Classic paddle vs AI showdown',
-    logo: 'assets/games/pong/logo.png',
-    path: 'games/pong/index.html',
-    color: '#bb00ff',
-    year: 'February 7th, 2026',
-    releaseDate: '2026-02-07'
-},
+        id: 'pong',
+        title: 'PONG',
+        description: 'Classic paddle vs AI showdown',
+        logo: 'assets/games/pong/logo.png',
+        path: 'games/pong/index.html',
+        color: '#bb00ff',
+        year: 'February 7th, 2026',
+        releaseDate: '2026-02-07'
+    },
+    {
+        id: 'minesweeper',
+        title: 'MINE SWEEPER',
+        description: 'Clear the minefield without exploding',
+        logo: 'assets/games/minesweeper/logo.png',
+        path: 'games/minesweeper/index.html',
+        color: '#eeff00',
+        year: 'February 8th, 2026',
+        releaseDate: '2026-02-08'
+    },
+    {
+        id: '2048',
+        title: '2048',
+        description: 'Slide and combine tiles to reach 2048',
+        logo: 'assets/games/2048/logo.png',
+        path: 'games/2048/index.html',
+        color: '#ff0d00',
+        year: 'February 8th, 2026',
+        releaseDate: '2026-02-08'
+    },
+    {
+        id: 'space-invaders',
+        title: 'SPACE INVADERS',
+        description: 'Defend Earth from alien invaders',
+        logo: 'assets/games/space-invaders/logo.png',
+        path: 'games/space-invaders/index.html',
+        color: '#5d00ff',
+        year: 'February 8th, 2026',
+        releaseDate: '2026-02-08'
+    }
 ];
     // 🎯 ADD MORE GAMES HERE - Just copy the format above
 
@@ -42,7 +72,7 @@ function isGameNew(releaseDate) {
     const now = new Date();
     const daysDiff = (now - release) / (1000 * 60 * 60 * 24);
     
-    return daysDiff >= 0 && daysDiff <= 7;
+    return daysDiff >= 0 && daysDiff <= 3;
 }
 
 // Get game by ID

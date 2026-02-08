@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon 2048</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            background: #0a0a0f;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Courier New', monospace;
+            color: #00ff00;
+        }
+
+        .game-container {
+            text-align: center;
+            position: relative;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            gap: 40px;
+        }
+
+        .title {
+            font-size: 48px;
+            font-weight: bold;
+            color: #00ffff;
+            text-shadow: 0 0 20px #00ffff;
+        }
+
+        .scores {
+            display: flex;
+            gap: 20px;
+        }
+
+        .score-box {
+            background: rgba(0, 20, 40, 0.8);
+            border: 2px solid #00ff00;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+
+        .score-label {
+            font-size: 12px;
+            color: #00ff00;
+            text-shadow: 0 0 5px #00ff00;
+            margin-bottom: 5px;
+        }
+
+        .score-value {
+            font-size: 24px;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+            font-weight: bold;
+        }
+
+        .game-board {
+            position: relative;
+            background: rgba(0, 20, 40, 0.9);
+            border: 4px solid #00ffff;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 0 40px rgba(0, 255, 255, 0.5);
+            width: 500px;
+            height: 500px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            gap: 15px;
+        }
+
+        .tile-container {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            width: calc(100% - 30px);
+            height: calc(100% - 30px);
+            pointer-events: none;
+        }
+
+        .grid-cell {
+            background: rgba(0, 50, 100, 0.3);
+            border: 2px solid rgba(0, 255, 255, 0.2);
+            border-radius: 8px;
+        }
+
+        .tile {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: bold;
+            border-radius: 8px;
+            transition: transform 0.15s ease-in-out;
+            width: 110px;
+            height: 110px;
+            border: 4px solid transparent;  /* Add border for outline */
+        }
+
+        .tile.new {
+            animation: pop 0.2s ease-in-out;
+        }
+
+        .tile.merged {
+            animation: merge 0.3s ease-in-out;
+        }
+
+        @keyframes pop {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes merge {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .controls {
+            margin-top: 30px;
+            font-size: 14px;
+            color: #00ff00;
+            text-shadow: 0 0 5px #00ff00;
+        }
+
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 50px 70px;
+            border: 3px solid #ff0000;
+            box-shadow: 0 0 40px rgba(255, 0, 0, 0.6);
+            display: none;
+            text-align: center;
+            z-index: 200;
+            border-radius: 12px;
+        }
+
+        .game-over h2 {
+            font-size: 36px;
+            margin-bottom: 20px;
+            color: #ff0000;
+            text-shadow: 0 0 20px #ff0000;
+        }
+
+        .game-over.win h2 {
+            color: #00ff00;
+            text-shadow: 0 0 20px #00ff00;
+        }
+
+        .game-over .final-score {
+            font-size: 20px;
+            margin-bottom: 30px;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff;
+        }
+
+        .game-over button {
+            background: transparent;
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            padding: 15px 40px;
+            font-size: 16px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            margin: 0 10px;
+            transition: all 0.3s;
+            text-shadow: 0 0 5px #00ff00;
+            border-radius: 4px;
+        }
+
+        .game-over button:hover {
+            background: #00ff00;
+            color: #000;
+            box-shadow: 0 0 20px #00ff00;
+        }
+
+        .particle-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+            background: transparent !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="header">
+            <div class="title">2048</div>
+            <div class="scores">
+                <div class="score-box">
+                    <div class="score-label">SCORE</div>
+                    <div class="score-value" id="score">0</div>
+                </div>
+                <div class="score-box">
+                    <div class="score-label">BEST</div>
+                    <div class="score-value" id="best">0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="game-board" id="gameBoard">
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="grid-cell"></div>
+            <div class="tile-container" id="tileContainer"></div>
+        </div>
+
+        <div class="controls">
+            Use Arrow Keys or WASD to move | Press R to restart
+        </div>
+
+        <div class="game-over" id="gameOver">
+            <h2 id="gameOverTitle">GAME OVER</h2>
+            <div class="final-score">FINAL SCORE: <span id="finalScore">0</span></div>
+            <button onclick="resetGame()">NEW GAME</button>
+        </div>
+    </div>
+
+    <canvas class="particle-canvas" id="particleCanvas"></canvas>
+
+    <script>
+        const particleCanvas = document.getElementById('particleCanvas');
+        const particleCtx = particleCanvas.getContext('2d');
+        
+        window.addEventListener('load', () => {
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+        });
+
+        window.addEventListener('resize', () => {
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+        });
+
+        // Tile colors
+        const TILE_COLORS = {
+            2: { bg: '#00ffff', border: '#00cccc', text: '#000', glow: '#00ffff' },
+            4: { bg: '#00ff00', border: '#00cc00', text: '#000', glow: '#00ff00' },
+            8: { bg: '#ffff00', border: '#cccc00', text: '#000', glow: '#ffff00' },
+            16: { bg: '#ff8800', border: '#cc6600', text: '#000', glow: '#ff8800' },
+            32: { bg: '#ff00ff', border: '#cc00cc', text: '#000', glow: '#ff00ff' },
+            64: { bg: '#ff0000', border: '#cc0000', text: '#fff', glow: '#ff0000' },
+            128: { bg: '#00ffaa', border: '#00cc88', text: '#000', glow: '#00ffaa' },
+            256: { bg: '#aa00ff', border: '#8800cc', text: '#fff', glow: '#aa00ff' },
+            512: { bg: '#ff00aa', border: '#cc0088', text: '#fff', glow: '#ff00aa' },
+            1024: { bg: '#00aaff', border: '#0088cc', text: '#fff', glow: '#00aaff' },
+            2048: { bg: '#ffffff', border: '#cccccc', text: '#000', glow: '#ffffff' },
+            // Beyond 2048, cycle colours in border and black for inner part
+            4096: { bg: '#00ffff', border: '#000000', text: '#fff', glow: '#00ffff' },
+            8192: { bg: '#00ff00', border: '#000000', text: '#fff', glow: '#00ff00' },
+            16384: { bg: '#ffff00', border: '#000000', text: '#fff', glow: '#ffff00' },
+            32768: { bg: '#ff8800', border: '#000000', text: '#fff', glow: '#ff8800' },
+            65536: { bg: '#ff00ff', border: '#000000', text: '#fff', glow: '#ff00ff' },
+            131072: { bg: '#ff0000', border: '#000000', text: '#fff', glow: '#ff0000' },
+            262144: { bg: '#00ffaa', border: '#000000', text: '#fff', glow: '#00ffaa' },
+            524288: { bg: '#aa00ff', border: '#000000', text: '#fff', glow: '#aa00ff' },
+            1048576: { bg: '#ff00aa', border: '#000000', text: '#fff', glow: '#ff00aa' },
+            2097152: { bg: '#00aaff', border: '#000000', text: '#fff', glow: '#00aaff' },
+            4194304: { bg: '#ffffff', border: '#000000', text: '#fff', glow: '#ffffff' },
+            // For tiles beyond 4 million, just cycle the same colors but with white inner instead of black
+            8388608: { bg: '#00ffff', border: '#ffffff', text: '#000', glow: '#00ffff' },
+            16777216: { bg: '#00ff00', border: '#ffffff', text: '#000', glow: '#00ff00' },
+            33554432: { bg: '#ffff00', border: '#ffffff', text: '#000', glow: '#ffff00' },
+            67108864: { bg: '#ff8800', border: '#ffffff', text: '#000', glow: '#ff8800' },
+            134217728: { bg: '#ff00ff', border: '#ffffff', text: '#000', glow: '#ff00ff' },
+            268435456: { bg: '#ff0000', border: '#ffffff', text: '#000', glow: '#ff0000' },
+            536870912: { bg: '#00ffaa', border: '#ffffff', text: '#000', glow: '#00ffaa' },
+            1073741824: { bg: '#aa00ff', border: '#ffffff', text: '#000', glow: '#aa00ff' },
+            2147483648: { bg: '#ff00aa', border: '#ffffff', text: '#000', glow: '#ff00aa' },
+            4294967296: { bg: '#00aaff', border: '#ffffff', text: '#000', glow: '#00aaff' },
+            8589934592: { bg: '#ffffff', border: '#ffffff', text: '#000', glow: '#ffffff' }
+        };
+
+        // Game state
+        let grid = Array(4).fill().map(() => Array(4).fill(0));
+        let score = 0;
+        let best = parseInt(localStorage.getItem('2048-best')) || 0;
+        let gameOver = false;
+        let hasWon = false;
+        let particles = [];
+        let animationFrame = null;
+        let lastParticleTime = performance.now();
+        let shakeOffset = { x: 0, y: 0 };
+        let shakeIntensity = 0;
+
+        // Audio
+        let audioContext = null;
+
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playMoveSound() {
+            if (!audioContext) initAudio();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 300;
+            oscillator.type = 'square';
+            
+            gainNode.gain.setValueAtTime(0.05, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        }
+
+        function playMergeSound(value) {
+            if (!audioContext) initAudio();
+            
+            const baseFreq = 400 + Math.log2(value) * 50;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(baseFreq, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, audioContext.currentTime + 0.15);
+            oscillator.type = 'square';
+            
+            gainNode.gain.setValueAtTime(0.12, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.15);
+        }
+
+        function playWinSound() {
+            if (!audioContext) initAudio();
+            
+            const notes = [523, 659, 784, 1047]; // C-E-G-C
+            notes.forEach((freq, i) => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = freq;
+                oscillator.type = 'square';
+                
+                const startTime = audioContext.currentTime + i * 0.15;
+                gainNode.gain.setValueAtTime(0.1, startTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+                
+                oscillator.start(startTime);
+                oscillator.stop(startTime + 0.3);
+            });
+        }
+
+        // Screen shake
+        function triggerShake(intensity) {
+            shakeIntensity = intensity;
+        }
+
+        function updateShake() {
+            if (shakeIntensity > 0) {
+                shakeOffset.x = (Math.random() - 0.5) * shakeIntensity;
+                shakeOffset.y = (Math.random() - 0.5) * shakeIntensity;
+                shakeIntensity *= 0.9;
+                if (shakeIntensity < 0.1) {
+                    shakeIntensity = 0;
+                    shakeOffset = { x: 0, y: 0 };
+                }
+            }
+        }
+
+        // Particles
+        function createMergeParticles(row, col, value) {
+            const board = document.getElementById('gameBoard');
+            const rect = board.getBoundingClientRect();
+            
+            const cellSize = 106.25;
+            const gap = 12.75;  // Updated
+            const tileSize = 110;
+            const centerOffset = (tileSize - cellSize) / 2;
+            const padding = 15;
+            
+            const centerX = rect.left + padding + col * (cellSize + gap) - centerOffset + tileSize / 2;
+            const centerY = rect.top + padding + row * (cellSize + gap) - centerOffset + tileSize / 2;
+            
+            const color = TILE_COLORS[value]?.glow || '#00ffff';
+            
+            for (let i = 0; i < 15; i++) {
+                const angle = (Math.PI * 2 * i) / 15 + (Math.random() - 0.5) * 0.5;
+                const speed = 2 + Math.random() * 4;
+                
+                particles.push({
+                    x: centerX,
+                    y: centerY,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 1.0,
+                    size: 4 + Math.random() * 4,
+                    color: color
+                });
+            }
+            
+            if (animationFrame === null) {
+                lastParticleTime = performance.now();
+                animationFrame = requestAnimationFrame(animateParticles);
+            }
+        }
+
+        function animateParticles(currentTime) {
+            const deltaTime = (currentTime - lastParticleTime) / 1000;
+            lastParticleTime = currentTime;
+            const clampedDelta = Math.min(deltaTime, 0.1);
+            
+            particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+            
+            particles = particles.filter(p => {
+                const dt = clampedDelta * 60;
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.vy += 0.15 * dt;
+                p.life -= 0.02 * dt;
+                
+                if (p.life <= 0) return false;
+                
+                particleCtx.globalAlpha = p.life;
+                particleCtx.fillStyle = p.color;
+                particleCtx.shadowBlur = 15;
+                particleCtx.shadowColor = p.color;
+                particleCtx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+                
+                return true;
+            });
+            
+            if (particles.length > 0) {
+                animationFrame = requestAnimationFrame(animateParticles);
+            } else {
+                animationFrame = null;
+            }
+        }
+
+        // Game logic
+        function init() {
+            document.getElementById('best').textContent = best;
+            addInitialTile();
+            addInitialTile();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameLoop() {
+            updateShake();
+            const board = document.getElementById('gameBoard');
+            board.style.transform = `translate(${shakeOffset.x}px, ${shakeOffset.y}px)`;
+            requestAnimationFrame(gameLoop);
+        }
+
+        function getRandomTileValue() {
+            // Determine the highest tile currently on the board
+            let maxTile = 0;
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    if (grid[r][c] > maxTile) maxTile = grid[r][c];
+                }
+            }
+
+            if (maxTile < 2) maxTile = 2;
+
+            // Base power (2 -> 1, 4 -> 2, 8 -> 3, ...)
+            const basePower = Math.max(1, Math.floor(Math.log2(maxTile)));
+
+            // Score-based boost using an exponent (sqrt) growth, slower than linear
+            // The divisor controls how fast score contributes; adjust if needed
+            const scoreFactor = Math.sqrt(score / 3000);
+            const scoreBoost = Math.floor(scoreFactor);
+
+            // Clamp extra unlocked levels so we never unlock too many at once
+            const extraLevels = Math.min(scoreBoost, 6);
+
+            // Do NOT automatically allow +1 above current max unless score unlocks it.
+            // This keeps unexpectedly large tiles from appearing too early.
+            const highestPower = basePower + extraLevels;
+
+            // Build list of available powers (descending: rarest -> most common)
+            const availablePowers = [];
+            for (let p = highestPower; p >= 1 && availablePowers.length < 6; p--) {
+                availablePowers.push(p);
+            }
+
+            // Use fixed absolute probabilities depending on how many tiers are available.
+            // This preserves very low absolute odds for the rarest tile even when fewer tiers exist.
+            // Tuned absolute probabilities to make very-high tiles extremely rare early on.
+            const probsTable = {
+                1: [1.0],
+                // With 2 tiers: almost always 2, tiny chance 4
+                2: [0.001, 0.999],
+                // 3 tiers: tiny chance for top, small chance mid, almost always bottom
+                3: [0.001, 0.009, 0.99],
+                // 4 tiers
+                4: [0.001, 0.004, 0.015, 0.98],
+                // 5 tiers
+                5: [0.001, 0.003, 0.01, 0.036, 0.95],
+                // 6 tiers (top remains very rare)
+                6: [0.001, 0.003, 0.009, 0.027, 0.15, 0.81]
+            };
+
+            const m = availablePowers.length;
+            const probs = probsTable[m] || probsTable[6];
+
+            // Pick a power according to these absolute probabilities
+            const rand = Math.random();
+            let cumulative = 0;
+            for (let i = 0; i < probs.length; i++) {
+                cumulative += probs[i];
+                if (rand < cumulative) {
+                    return Math.pow(2, availablePowers[i]);
+                }
+            }
+
+            // Fallback to the most common (lowest) available
+            return Math.pow(2, availablePowers[availablePowers.length - 1]);
+        }
+
+        // Place an initial tile (only 2 or 4) to avoid early high tiles from unlocked logic
+        function addInitialTile() {
+            const empty = [];
+            for (let row = 0; row < 4; row++) {
+                for (let col = 0; col < 4; col++) {
+                    if (grid[row][col] === 0) {
+                        empty.push({ row, col });
+                    }
+                }
+            }
+            if (empty.length > 0) {
+                const pos = empty[Math.floor(Math.random() * empty.length)];
+                grid[pos.row][pos.col] = Math.random() < 0.9 ? 2 : 4;
+            }
+        }
+
+        function addRandomTile() {
+            const empty = [];
+            for (let row = 0; row < 4; row++) {
+                for (let col = 0; col < 4; col++) {
+                    if (grid[row][col] === 0) {
+                        empty.push({ row, col });
+                    }
+                }
+            }
+            
+            if (empty.length > 0) {
+                const pos = empty[Math.floor(Math.random() * empty.length)];
+                grid[pos.row][pos.col] = getRandomTileValue();
+            }
+        }
+
+        function move(direction) {
+            if (gameOver) return;
+            
+            const oldGrid = JSON.stringify(grid);
+            let moved = false;
+            let merged = [];
+            
+            if (direction === 'left') {
+                for (let row = 0; row < 4; row++) {
+                    const { newRow, didMove, mergedCells } = mergeRow(grid[row]);
+                    if (didMove) moved = true;
+                    grid[row] = newRow;
+                    mergedCells.forEach(col => merged.push({ row, col }));
+                }
+            } else if (direction === 'right') {
+                for (let row = 0; row < 4; row++) {
+                    const { newRow, didMove, mergedCells } = mergeRow(grid[row].slice().reverse());
+                    if (didMove) moved = true;
+                    grid[row] = newRow.reverse();
+                    mergedCells.forEach(col => merged.push({ row, col: 3 - col }));
+                }
+            } else if (direction === 'up') {
+                for (let col = 0; col < 4; col++) {
+                    const column = [grid[0][col], grid[1][col], grid[2][col], grid[3][col]];
+                    const { newRow, didMove, mergedCells } = mergeRow(column);
+                    if (didMove) moved = true;
+                    for (let row = 0; row < 4; row++) {
+                        grid[row][col] = newRow[row];
+                    }
+                    mergedCells.forEach(row => merged.push({ row, col }));
+                }
+            } else if (direction === 'down') {
+                for (let col = 0; col < 4; col++) {
+                    const column = [grid[3][col], grid[2][col], grid[1][col], grid[0][col]];
+                    const { newRow, didMove, mergedCells } = mergeRow(column);
+                    if (didMove) moved = true;
+                    for (let row = 0; row < 4; row++) {
+                        grid[3 - row][col] = newRow[row];
+                    }
+                    mergedCells.forEach(row => merged.push({ row: 3 - row, col }));
+                }
+            }
+            
+            if (moved) {
+                playMoveSound();
+                
+                // Create particles and shake for merges
+                merged.forEach(({ row, col }) => {
+                    const value = grid[row][col];
+                    playMergeSound(value);
+                    createMergeParticles(row, col, value);
+                    
+                    if (value >= 128) {
+                        triggerShake(5);
+                    }
+                    
+                    // Play win sound at 2048 but keep playing!
+                    if (value === 2048 && !hasWon) {
+                        hasWon = true;
+                        playWinSound();
+                        triggerShake(15); // Big shake for 2048!
+                        // Don't show win screen - just celebrate and continue!
+                    }
+                });
+                
+                addRandomTile();
+                render();
+                
+                if (isGameOver()) {
+                    gameOver = true;
+                    setTimeout(() => showGameOver(), 500);
+                }
+            }
+        }
+
+        function mergeRow(row) {
+            let newRow = row.filter(x => x !== 0);
+            let mergedCells = [];
+            let didMove = false;
+            
+            for (let i = 0; i < newRow.length - 1; i++) {
+                if (newRow[i] === newRow[i + 1]) {
+                    newRow[i] *= 2;
+                    score += newRow[i];
+                    mergedCells.push(i);
+                    newRow.splice(i + 1, 1);
+                    didMove = true;
+                }
+            }
+            
+            while (newRow.length < 4) {
+                newRow.push(0);
+            }
+            
+            if (JSON.stringify(row) !== JSON.stringify(newRow)) {
+                didMove = true;
+            }
+            
+            return { newRow, didMove, mergedCells };
+        }
+
+        function isGameOver() {
+            // Check for empty cells
+            for (let row = 0; row < 4; row++) {
+                for (let col = 0; col < 4; col++) {
+                    if (grid[row][col] === 0) return false;
+                }
+            }
+            
+            // Check for possible merges
+            for (let row = 0; row < 4; row++) {
+                for (let col = 0; col < 4; col++) {
+                    const value = grid[row][col];
+                    if (col < 3 && grid[row][col + 1] === value) return false;
+                    if (row < 3 && grid[row + 1][col] === value) return false;
+                }
+            }
+            
+            return true;
+        }
+
+        function render() {
+            const container = document.getElementById('tileContainer');
+            container.innerHTML = '';
+            
+            for (let row = 0; row < 4; row++) {
+                for (let col = 0; col < 4; col++) {
+                    const value = grid[row][col];
+                    if (value !== 0) {
+                        const tile = createTile(value, row, col);
+                        container.appendChild(tile);
+                    }
+                }
+            }
+            
+            document.getElementById('score').textContent = score;
+            
+            if (score > best) {
+                best = score;
+                localStorage.setItem('2048-best', best);
+                document.getElementById('best').textContent = best;
+            }
+        }
+
+        function createTile(value, row, col) {
+            const tile = document.createElement('div');
+            tile.className = 'tile new';
+            
+            const colors = TILE_COLORS[value] || TILE_COLORS[2048];
+            
+            // Background is the OUTER color (border rim) - USE 'border' not 'outer'
+            tile.style.background = colors.border;
+            tile.style.color = colors.text;
+            
+            // Use inset box-shadow to create the inner color area - USE 'bg' not 'inner'
+            tile.style.boxShadow = `
+                0 0 20px ${colors.glow},
+                inset 0 0 0 6px ${colors.bg}
+            `;
+            
+            tile.textContent = value;
+            
+            if (value >= 1024) {
+                tile.style.fontSize = '24px';
+            }
+            
+            const cellSize = 106.25;
+            const gap = 12.75;
+            const tileSize = 110;
+            const centerOffset = (tileSize - cellSize) / 2;
+            
+            tile.style.left = (col * (cellSize + gap) - centerOffset) + 'px';
+            tile.style.top = (row * (cellSize + gap) - centerOffset) + 'px';
+            
+            return tile;
+        }
+
+        function showGameOver() {
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameOverTitle').textContent = 'GAME OVER';
+            const gameOverDiv = document.getElementById('gameOver');
+            gameOverDiv.classList.remove('win');
+            gameOverDiv.style.display = 'block';
+        }
+
+        function showWin() {
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameOverTitle').textContent = 'YOU WIN!';
+            const gameOverDiv = document.getElementById('gameOver');
+            gameOverDiv.classList.add('win');
+            gameOverDiv.style.display = 'block';
+        }
+
+        function resetGame() {
+            grid = Array(4).fill().map(() => Array(4).fill(0));
+            score = 0;
+            gameOver = false;
+            hasWon = false;
+            particles = [];
+            shakeIntensity = 0;
+            shakeOffset = { x: 0, y: 0 };
+            document.getElementById('gameOver').style.display = 'none';
+            particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+            addRandomTile();
+            addRandomTile();
+            render();
+        }
+
+        // Controls
+        document.addEventListener('keydown', (e) => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
+                e.preventDefault();
+            }
+            
+            switch(e.code) {
+                case 'ArrowLeft':
+                case 'KeyA':
+                    move('left');
+                    break;
+                case 'ArrowRight':
+                case 'KeyD':
+                    move('right');
+                    break;
+                case 'ArrowUp':
+                case 'KeyW':
+                    move('up');
+                    break;
+                case 'ArrowDown':
+                case 'KeyS':
+                    move('down');
+                    break;
+                case 'KeyR':
+                    resetGame();
+                    break;
+            }
+        });
+
+        // Touch controls for mobile
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        });
+
+        document.addEventListener('touchend', (e) => {
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            
+            const dx = touchEndX - touchStartX;
+            const dy = touchEndY - touchStartY;
+            
+            if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+                move(dx > 0 ? 'right' : 'left');
+            } else if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 50) {
+                move(dy > 0 ? 'down' : 'up');
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>

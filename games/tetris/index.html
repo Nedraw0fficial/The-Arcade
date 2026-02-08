@@ -179,6 +179,17 @@
             z-index: 100;
         }
 
+        .particle-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+            background: transparent !important;
+        }
+
         @media (max-width: 1024px) {
             .game-wrapper {
                 flex-direction: column;
@@ -239,13 +250,27 @@
         <button onclick="resetGame()">PLAY AGAIN</button>
     </div>
 
+    <canvas class="particle-canvas" id="particleCanvas"></canvas>
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const nextCanvas = document.getElementById('nextPieceCanvas');
         const nextCtx = nextCanvas.getContext('2d');
-        
-        // Set canvas size
+        const particleCanvas = document.getElementById('particleCanvas');
+        const particleCtx = particleCanvas.getContext('2d');
+
+        // Set particle canvas size when window loads
+        window.addEventListener('load', () => {
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+        });
+
+        window.addEventListener('resize', () => {
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+        });
+
         const BLOCK_SIZE = 30;
         const COLS = 10;
         const ROWS = 20;
@@ -289,7 +314,176 @@
         let currentY = 0;
         let nextPiece = null;
 
-        // Initialize
+        // Particles
+        let particles = [];
+        let animationFrame = null;
+        let lastParticleTime = performance.now();
+
+        // Screen shake
+        let shakeOffset = { x: 0, y: 0 };
+        let shakeIntensity = 0;
+
+        // Audio
+        let audioContext = null;
+
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playSoftDrop() {
+            if (!audioContext) initAudio();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 200;
+            oscillator.type = 'square';
+            
+            gainNode.gain.setValueAtTime(0.05, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.05);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.05);
+        }
+
+        function playHardDrop() {
+            if (!audioContext) initAudio();
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            const filter = audioContext.createBiquadFilter();
+            
+            oscillator.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(150, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(30, audioContext.currentTime + 0.3);
+            oscillator.type = 'sawtooth';
+            
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(1000, audioContext.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.3);
+            
+            gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+            
+            // Trigger screen shake
+            shakeIntensity = 8;
+        }
+
+        function playLineClear(linesCleared) {
+            if (!audioContext) initAudio();
+            
+            const baseFreq = [400, 500, 600, 800][linesCleared - 1] || 400;
+            
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.setValueAtTime(baseFreq, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, audioContext.currentTime + 0.2);
+            oscillator.type = 'square';
+            
+            gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.2);
+        }
+
+        // Create line clear particles
+        function createLineClearParticles(rowNumbers) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = rect.width / canvas.width;
+            const scaleY = rect.height / canvas.height;
+            
+            rowNumbers.forEach(row => {
+                for (let col = 0; col < COLS; col++) {
+                    if (board[row][col]) {
+                        const color = board[row][col];
+                        const centerX = rect.left + (col * BLOCK_SIZE + BLOCK_SIZE / 2) * scaleX;
+                        const centerY = rect.top + (row * BLOCK_SIZE + BLOCK_SIZE / 2) * scaleY;
+                        
+                        // Create 8 particles per block
+                        for (let i = 0; i < 8; i++) {
+                            const angle = (Math.PI * 2 * i) / 8 + (Math.random() - 0.5) * 0.5;
+                            const speed = 1 + Math.random() * 3;
+                            
+                            particles.push({
+                                x: centerX,
+                                y: centerY,
+                                vx: Math.cos(angle) * speed,
+                                vy: Math.sin(angle) * speed - 1, // Upward bias
+                                life: 1.0,
+                                size: 3 + Math.random() * 3,
+                                color: color
+                            });
+                        }
+                    }
+                }
+            });
+            
+            if (animationFrame === null) {
+                lastParticleTime = performance.now();
+                animationFrame = requestAnimationFrame(animateParticles);
+            }
+        }
+
+        // Animate particles
+        function animateParticles(currentTime) {
+            const deltaTime = (currentTime - lastParticleTime) / 1000;
+            lastParticleTime = currentTime;
+            const clampedDelta = Math.min(deltaTime, 0.1);
+            
+            particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+            
+            particles = particles.filter(p => {
+                const dt = clampedDelta * 60;
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                p.vy += 0.15 * dt; // gravity
+                p.life -= 0.02 * dt;
+                
+                if (p.life <= 0) return false;
+                
+                particleCtx.globalAlpha = p.life;
+                particleCtx.fillStyle = p.color;
+                particleCtx.shadowBlur = 15;
+                particleCtx.shadowColor = p.color;
+                particleCtx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+                
+                return true;
+            });
+            
+            if (particles.length > 0) {
+                animationFrame = requestAnimationFrame(animateParticles);
+            } else {
+                animationFrame = null;
+            }
+        }
+
+        // Update screen shake
+        function updateScreenShake() {
+            if (shakeIntensity > 0) {
+                shakeOffset.x = (Math.random() - 0.5) * shakeIntensity;
+                shakeOffset.y = (Math.random() - 0.5) * shakeIntensity;
+                shakeIntensity *= 0.9;
+                if (shakeIntensity < 0.1) {
+                    shakeIntensity = 0;
+                    shakeOffset = { x: 0, y: 0 };
+                }
+            }
+        }
+
         function init() {
             nextPiece = randomPiece();
             spawnPiece();
@@ -356,17 +550,26 @@
 
         function clearLines() {
             let linesCleared = 0;
+            let clearedRows = [];
             
             for (let row = ROWS - 1; row >= 0; row--) {
                 if (board[row].every(cell => cell !== 0)) {
-                    board.splice(row, 1);
-                    board.unshift(Array(COLS).fill(0));
+                    clearedRows.push(row);
                     linesCleared++;
-                    row++; // Check the same row again
                 }
             }
 
             if (linesCleared > 0) {
+                // Create particles BEFORE clearing
+                createLineClearParticles(clearedRows);
+                playLineClear(linesCleared);
+                
+                // Clear the lines
+                clearedRows.forEach(row => {
+                    board.splice(row, 1);
+                    board.unshift(Array(COLS).fill(0));
+                });
+                
                 lines += linesCleared;
                 score += [0, 100, 300, 500, 800][linesCleared] * level;
                 level = Math.floor(lines / 10) + 1;
@@ -403,7 +606,6 @@
             if (!collides(currentX, currentY, rotated)) {
                 currentPiece.shape = rotated;
             } else {
-                // Wall kick
                 for (let kick of [-1, 1, -2, 2]) {
                     if (!collides(currentX + kick, currentY, rotated)) {
                         currentX += kick;
@@ -419,6 +621,7 @@
             
             if (!collides(currentX, currentY + 1, currentPiece.shape)) {
                 currentY++;
+                playSoftDrop();
             } else {
                 mergePiece();
                 clearLines();
@@ -432,6 +635,7 @@
             while (!collides(currentX, currentY + 1, currentPiece.shape)) {
                 currentY++;
             }
+            playHardDrop();
             mergePiece();
             clearLines();
             spawnPiece();
@@ -446,11 +650,12 @@
         }
 
         function draw() {
-            // Clear canvas
+            ctx.save();
+            ctx.translate(shakeOffset.x, shakeOffset.y);
+            
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw grid
             ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
             ctx.lineWidth = 1;
             for (let row = 0; row <= ROWS; row++) {
@@ -466,7 +671,6 @@
                 ctx.stroke();
             }
 
-            // Draw board
             for (let row = 0; row < ROWS; row++) {
                 for (let col = 0; col < COLS; col++) {
                     if (board[row][col]) {
@@ -475,7 +679,6 @@
                 }
             }
 
-            // Draw ghost piece
             if (currentPiece) {
                 const ghostY = getGhostY();
                 ctx.globalAlpha = 0.2;
@@ -489,7 +692,6 @@
                 ctx.globalAlpha = 1.0;
             }
 
-            // Draw current piece
             if (currentPiece) {
                 for (let row = 0; row < currentPiece.shape.length; row++) {
                     for (let col = 0; col < currentPiece.shape[row].length; col++) {
@@ -499,23 +701,22 @@
                     }
                 }
             }
+            
+            ctx.restore();
         }
 
         function drawBlock(x, y, color) {
             const pixelX = x * BLOCK_SIZE;
             const pixelY = y * BLOCK_SIZE;
 
-            // Main block
             ctx.fillStyle = color;
             ctx.fillRect(pixelX + 1, pixelY + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
 
-            // Glow effect
             ctx.shadowBlur = 10;
             ctx.shadowColor = color;
             ctx.fillRect(pixelX + 1, pixelY + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
             ctx.shadowBlur = 0;
 
-            // Highlight
             ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
             ctx.fillRect(pixelX + 2, pixelY + 2, BLOCK_SIZE - 10, BLOCK_SIZE - 10);
         }
@@ -566,6 +767,10 @@
             dropInterval = 1000;
             gameOver = false;
             paused = false;
+            particles = [];
+            shakeIntensity = 0;
+            shakeOffset = { x: 0, y: 0 };
+            particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
             document.getElementById('gameOver').style.display = 'none';
             document.getElementById('pausedOverlay').style.display = 'none';
             updateScore();
@@ -590,11 +795,11 @@
                 }
             }
 
+            updateScreenShake();
             draw();
             requestAnimationFrame(gameLoop);
         }
 
-        // Controls
         document.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowLeft') {
                 e.preventDefault();
@@ -621,7 +826,6 @@
             }
         });
 
-        // Start game
         init();
     </script>
 </body>
