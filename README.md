@@ -58,7 +58,8 @@ Open `js/games.js` and add your game to the `GAMES` array:
     logo: 'assets/games/your-game-name/logo.png',  // Path to logo
     path: 'games/your-game-name/index.html',       // Path to game
     color: '#ff00ff',               // Neon accent color (hex)
-    year: '2024'                    // Release year
+    year: 'February 7th, 2026',                   // Release year
+    releaseDate: '2026-02-07'
 }
 ```
 
