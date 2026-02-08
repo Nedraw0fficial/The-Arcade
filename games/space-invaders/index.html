@@ -10,7 +10,7 @@
         .wrap { position: relative; }
         canvas { display: block; background: #000; border: 3px solid #00ff00; box-shadow: 0 0 30px rgba(0,255,0,0.5); image-rendering: pixelated; }
         .ui { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 40px; font-size: 18px; color: #00ff00; text-shadow: 0 0 8px #00ff00; z-index: 10; }
-        .hp-bar { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); width: 300px; height: 20px; background: #300; border: 2px solid #00ff00; z-index: 10; }
+        .hp-bar { position: absolute; top: 10px; left: 15px; width: 200px; height: 18px; background: #300; border: 2px solid #00ff00; z-index: 10; }
         .hp-fill { height: 100%; background: linear-gradient(90deg, #ff0000, #ffff00, #00ff00); box-shadow: 0 0 10px #00ff00; transition: width 0.3s; }
         .over { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.95); padding: 50px 70px; border: 3px solid #ff0000; box-shadow: 0 0 40px rgba(255,0,0,0.6); text-align: center; display: none; z-index: 20; border-radius: 8px; }
         .over h2 { font-size: 40px; color: #ff0000; text-shadow: 0 0 20px #ff0000; margin-bottom: 20px; }
@@ -44,22 +44,22 @@ const W=900, H=700;
 c.width=W; c.height=H;
 
 function resize() {
-    const scale = Math.min(window.innerWidth/W, window.innerHeight/H)*0.5;
+    const scale = Math.min(window.innerWidth/W, window.innerHeight/H)*0.55;
     c.style.width=(W*scale)+'px';
     c.style.height=(H*scale)+'px';
 }
 resize();
 window.addEventListener('resize',resize);
 
-// Types with EXACT specs
+// Types with EXACT specs - INCREASED ATTACK RATES
 const TYPES = {
-    SCOUT: {hp:1,col:'#39FF14',sz:32,pts:10,dmg:1,fire:0.0012,wt:100},
-    ZAP: {hp:1,col:'#00ffff',sz:26,pts:25,dmg:1,fire:0.0004,wt:35},
-    TANK: {hp:5,col:'#ff0000',sz:48,pts:50,dmg:3,fire:0.00025,wt:15},
-    SPLITTER: {hp:2,col:'#ffff00',sz:34,pts:40,dmg:1,fire:0.00045,wt:25,split:true},
-    BOMBER: {hp:3,col:'#ff00ff',sz:42,pts:60,dmg:5,fire:0.0003,wt:10},
-    ELITE: {hp:4,col:'#ff8800',sz:38,pts:100,dmg:2,fire:0.0004,wt:5},
-    BOSS: {hp:10,col:'#ffffff',sz:70,pts:500,dmg:5,fire:0.001,wt:1}
+    SCOUT: {hp:1,col:'#39FF14',sz:38,pts:10,dmg:1,fire:0.002,wt:100},
+    ZAP: {hp:1,col:'#00ffff',sz:32,pts:25,dmg:1,fire:0.0006,wt:35},
+    TANK: {hp:5,col:'#ff0000',sz:52,pts:50,dmg:3,fire:0.0004,wt:15},
+    SPLITTER: {hp:2,col:'#ffff00',sz:40,pts:40,dmg:1,fire:0.0012,wt:25,split:true}, // More often
+    BOMBER: {hp:3,col:'#ff00ff',sz:46,pts:60,dmg:5,fire:0.0008,wt:10}, // More often
+    ELITE: {hp:4,col:'#ff8800',sz:44,pts:100,dmg:2,fire:0.0012,wt:5}, // Much more often!
+    BOSS: {hp:18,col:'#ffffff',sz:80,pts:500,dmg:5,fire:0.002,wt:1} // Much more often!
 };
 
 let player,bullets,eBullets,enemies,particles,stars,shields,powerups;
@@ -87,19 +87,25 @@ function init() {
     
     for(let i=0;i<120;i++) stars.push({x:Math.random()*W,y:Math.random()*H,sz:1+Math.random()*2,spd:0.3+Math.random(),br:0.3+Math.random()*0.7});
     
-    // Proper shields
+    // Shields - PROPERLY CENTERED
     shields=[];
     const sy=580;
+    const shieldW=90;
+    // Center 3 shields with proper spacing
+    const shield1X=(W/2)-shieldW/2-180; // Left shield
+    const shield2X=(W/2)-shieldW/2;      // Center shield
+    const shield3X=(W/2)-shieldW/2+180;  // Right shield
+    
     for(let i=0;i<3;i++) {
-        const sx=150+i*300;
-        const shield={x:sx,y:sy,w:90,h:70,pix:[]};
+        const sx=[shield1X,shield2X,shield3X][i];
+        const shield={x:sx,y:sy,w:shieldW,h:55,pix:[]};
         for(let y=0;y<shield.h;y++) {
             shield.pix[y]=[];
             for(let x=0;x<shield.w;x++) {
                 const dx=(x-shield.w/2)/(shield.w/2);
                 const dy=y/shield.h;
                 const curve = dy<0.5 ? Math.sqrt(1-dx*dx) : 1;
-                shield.pix[y][x] = (dy<0.5 ? (1-dy/0.5)<curve : dy<0.85) ? 1:0;
+                shield.pix[y][x] = (dy<0.5 ? (1-dy/0.5)<curve : dy<0.7) ? 1:0;
             }
         }
         shields.push(shield);
@@ -141,14 +147,14 @@ function spawnWave() {
             if(k==='ELITE')w=15;
             if(k==='BOSS')w=3;
         } else {
-            w=t.wt+(wave-8)*(k==='BOSS'?2:k==='ELITE'?3:0);
-            if(k==='SCOUT')w=Math.max(40,100-(wave-8)*5);
+            w=t.wt+(wave-8)*(k==='BOSS'?1.5:k==='ELITE'?2:0); // Reduced multipliers
+            if(k==='SCOUT')w=Math.max(40,100-(wave-8)*3); // Reduced from *5 to *3
         }
         weights[k]=w;
     });
     
     if(isBoss) {
-        enemies.push(createEnemy('BOSS',W/2-32,50));
+        enemies.push(createEnemy('BOSS',W/2-40,50));
         for(let i=0;i<6;i++) enemies.push(createEnemy('ELITE',100+i*130,100));
     } else {
         const rows=Math.min(4+Math.floor(wave/3),6);
@@ -158,7 +164,6 @@ function spawnWave() {
         for(let r=0;r<rows;r++) {
             for(let c=0;c<cols;c++) {
                 const type=pickWeighted(weights);
-                const t=TYPES[type];
                 enemies.push(createEnemy(type,startX+c*70,40+r*55));
             }
         }
@@ -178,7 +183,7 @@ function pickWeighted(weights) {
 
 function createEnemy(type,x,y) {
     const t=TYPES[type];
-    return {type,x,y,w:t.sz,h:t.sz,hp:t.hp,maxHp:t.hp,col:t.col,pts:t.pts,dmg:t.dmg,fire:t.fire*(1+wave*0.05),proj:t.proj,split:t.split||false};
+    return {type,x,y,w:t.sz,h:t.sz,hp:t.hp,maxHp:t.hp,col:t.col,pts:t.pts,dmg:t.dmg,fire:t.fire*(1+wave*0.03),split:t.split||false}; // Reduced from 0.05 to 0.03
 }
 
 function showWave() {
@@ -212,16 +217,24 @@ function update(dt) {
     if(keys['ArrowLeft']||keys['a'])player.x=Math.max(0,player.x-player.spd*dt);
     if(keys['ArrowRight']||keys['d'])player.x=Math.min(W-player.w,player.x+player.spd*dt);
     
-    // Bullets
+    // Bullets - FIXED: prevent continuous collision with same enemy
     bullets=bullets.filter(b=>{
         b.y-=700*dt;
         if(b.y<0)return false;
+        
+        if(!b.hitEnemies) b.hitEnemies=[]; // Track which enemies already hit
+        
         for(let i=enemies.length-1;i>=0;i--) {
             const e=enemies[i];
+            // Skip if already hit this enemy
+            if(b.hitEnemies.includes(i)) continue;
+            
             if(b.x>e.x-8&&b.x<e.x+e.w+8&&b.y>e.y-8&&b.y<e.y+e.h+8) {
-                e.hp-=(projectileBoost?2:1);
+                b.hitEnemies.push(i); // Mark as hit
+                e.hp-=(b.boosted?2:1);
                 parts(b.x,b.y,e.col,12);
                 tone(800,0.06);
+                
                 if(e.hp<=0) {
                     score+=e.pts;
                     document.getElementById('s').textContent=score;
@@ -230,12 +243,13 @@ function update(dt) {
                     parts(e.x+e.w/2,e.y+e.h/2,e.col,30);
                     shake(e.type==='BOSS'?30:8);
                     if(e.type==='BOSS')tone(100,0.5,'sawtooth',0.3);
-                    if(e.type==='BOSS')tone(100,0.5,'sawtooth',0.3);
+                    
                     if(e.split&&Math.random()<0.5) {
                         enemies.push(createEnemy('SCOUT',e.x-25,e.y));
                         enemies.push(createEnemy('SCOUT',e.x+25,e.y));
                     }
-                    if(Math.random()<0.08) {
+                    
+                    if(Math.random()<0.03) {
                         const typeWeights={rapid:20,shield:25,nuke:2,heal:20};
                         const typeArr=[];
                         Object.keys(typeWeights).forEach(t=>{
@@ -244,39 +258,96 @@ function update(dt) {
                         const type=typeArr[Math.floor(Math.random()*typeArr.length)];
                         powerups.push({type:type,x:e.x,y:e.y,spd:180});
                     }
+                    
                     enemies.splice(i,1);
                 }
+                
+                // Boosted bullets can hit 2 enemies total
+                if(b.boosted && b.hitEnemies.length>=2) return false;
+                // Normal bullets stop after 1 hit
+                if(!b.boosted) return false;
             }
         }
         return true;
     });
     
-    // Enemy bullets with PROPER angle movement
+    // Enemy bullets
     eBullets=eBullets.filter(b=>{
-        // Handle different bullet types
+        // Charging projectiles stay attached to alien
+        if(b.type==='eliteCharging') {
+            // Remove if marked for removal OR parent died OR charge expired
+            if(b.shouldRemove) return false;
+            if(!b.parentAlien || b.parentAlien.hp<=0) return false;
+            
+            b.chargeProgress+=dt;
+            if(b.chargeProgress>=b.maxCharge) return false; // Expired
+            
+            const alienCX=b.parentAlien.x+b.parentAlien.w/2;
+            const alienCY=b.parentAlien.y+b.parentAlien.h;
+            b.x=alienCX+b.attachX;
+            b.y=alienCY;
+            
+            // Charge particles
+            if(Math.random()<0.25) {
+                const ang=Math.random()*Math.PI*2;
+                particles.push({
+                    x:b.x+Math.random()*8-4,y:b.y+Math.random()*8-4,
+                    vx:Math.cos(ang)*40,vy:Math.sin(ang)*40-60,
+                    life:0.5,sz:2,col:'#ff8800'
+                });
+            }
+            
+            // LOW frequency charge sound
+            const chargePct=b.chargeProgress/b.maxCharge;
+            if(Math.random()<0.08) {
+                tone(200+chargePct*150,0.08,'sine',0.04);
+            }
+            
+            return true;
+        }
+        
+        // Normal bullet movement
         if(b.vx!==undefined&&b.vy!==undefined) {
-            // Angled shots
             b.x+=b.vx*dt;
             b.y+=b.vy*dt;
         } else {
-            // Standard vertical
             b.y+=(b.spd||350)*dt;
         }
         
-        // Homing behavior with deviation limit
-        if(b.homing&&player) {
+        // ELITE homing with ACTIVATION RADIUS - MAINTAIN SPEED
+        if(b.homing&&player&&b.type==='elite') {
             const dx=(player.x+player.w/2)-b.x;
-            const currentAngle=b.angle||0;
-            const targetAngle=Math.atan2(dx,100);
-            const maxDev=b.maxDeviation||0.5;
-            const newAngle=Math.max(-maxDev,Math.min(maxDev,targetAngle));
-            b.angle=newAngle;
-            b.x+=Math.sin(newAngle)*100*dt;
+            const dy=(player.y+player.h/2)-b.y;
+            const dist=Math.sqrt(dx*dx+dy*dy);
+            const activationRadius=b.homingRadius||250;
+            
+            // Calculate current speed
+            const currentSpeed=Math.sqrt(b.vx*b.vx+b.vy*b.vy);
+            
+            // Only home if within activation radius!
+            if(dist<activationRadius) {
+                const targetAngle=Math.atan2(dx,dy);
+                const currentAngle=b.angle||0;
+                const angleDiff=targetAngle-currentAngle;
+                const maxTurn=0.4;
+                
+                // Normalize angle
+                let normalizedDiff=angleDiff;
+                while(normalizedDiff>Math.PI)normalizedDiff-=Math.PI*2;
+                while(normalizedDiff<-Math.PI)normalizedDiff+=Math.PI*2;
+                
+                // Turn towards player
+                const turnAmount=Math.max(-maxTurn*dt*4,Math.min(maxTurn*dt*4,normalizedDiff));
+                b.angle=currentAngle+turnAmount;
+                
+                // Apply velocity at SAME SPEED (600!)
+                b.vx=Math.sin(b.angle)*600;
+                b.vy=Math.cos(b.angle)*600;
+            }
         }
         
         if(b.y>H||b.x<-50||b.x>W+50)return false;
         
-        // Hit player
         if(b.x>player.x&&b.x<player.x+player.w&&b.y>player.y&&b.y<player.y+player.h) {
             player.hp-=b.dmg||1;
             document.getElementById('hp').style.width=(player.hp/player.maxHp*100)+'%';
@@ -287,7 +358,6 @@ function update(dt) {
             return false;
         }
         
-        // Hit shield
         for(let s of shields) {
             const sx=Math.floor(b.x-s.x);
             const sy=Math.floor(b.y-s.y);
@@ -307,9 +377,9 @@ function update(dt) {
         return true;
     });
     
-    // Typewriter movement for ALL aliens + individual patterns
+    // Typewriter movement
     moveTimer+=dt*1000;
-    const moveInt=Math.max(700,1700-wave*12);
+    const moveInt=Math.max(700,1700-wave*8); // Reduced from wave*12 to wave*8
     if(moveTimer>=moveInt) {
         moveTimer=0;
         let hitEdge=false;
@@ -324,7 +394,7 @@ function update(dt) {
         }
     }
     
-    // Individual patterns ON TOP of typewriter
+    // Individual patterns
     enemies.forEach(e=>{
         if(!e.angle)e.angle=Math.random()*Math.PI*2;
         if(!e.patternTimer)e.patternTimer=0;
@@ -333,115 +403,268 @@ function update(dt) {
         e.patternTimer+=dt;
         
         if(e.type==='SCOUT') {
-            // No extra movement
         } else if(e.type==='ZAP') {
-            // Fast left-right
             e.x+=Math.sin(e.angle*2.5)*200*dt;
         } else if(e.type==='TANK') {
-            // Slow left-right
             e.x+=Math.sin(e.angle)*40*dt;
         } else if(e.type==='SPLITTER') {
-            // Wave pattern
             e.x+=Math.sin(e.angle*1.5)*80*dt;
         } else if(e.type==='BOMBER') {
-            // Random erratic movement + hide behind aliens
             if(e.patternTimer>1.5) {
                 e.patternTimer=0;
                 e.dir=Math.random()<0.5?1:-1;
-                if(Math.random()<0.3)e.dir=0; // Sometimes move back up
+                if(Math.random()<0.3)e.dir=0;
             }
             e.x+=e.dir*100*dt;
-            if(e.dir===0)e.y-=50*dt; // Move up
+            if(e.dir===0)e.y-=50*dt;
             
-            // Hide behind nearby aliens (prefer tanks)
+            // Keep on screen!
+            if(e.x<20) {e.x=20; e.dir=1;}
+            if(e.x+e.w>W-20) {e.x=W-20-e.w; e.dir=-1;}
+            
+            // Stay at the back! Move up if too far forward
+            if(e.y>300) e.y-=80*dt;
+            
             const nearby=enemies.find(a=>a!==e&&Math.abs(a.x-e.x)<100&&a.y<e.y&&a.y>e.y-80);
             if(nearby) {
                 const dx=(nearby.x+nearby.w/2)-(e.x+e.w/2);
                 e.x+=Math.sign(dx)*80*dt;
             }
         } else if(e.type==='ELITE') {
-            // Fast chaotic movement
-            e.x+=Math.cos(e.angle*2)*180*dt;
-            e.y+=Math.sin(e.angle)*60*dt;
+            // CHAOTIC erratic movement - but STAY AT BACK
+            e.x+=Math.cos(e.angle*3)*220*dt;
+            e.y+=Math.sin(e.angle*2.5)*90*dt;
+            // Random direction switches
+            if(Math.random()<dt*2) e.angle+=Math.random()*Math.PI*0.5;
+            
+            // KEEP IN BOUNDS!
+            if(e.x<30) {e.x=30; e.angle+=Math.PI*0.5;}
+            if(e.x+e.w>W-30) {e.x=W-30-e.w; e.angle-=Math.PI*0.5;}
+            
+            // Stay at the back! Don't go below y=350
+            if(e.y>350) e.y=350;
         } else if(e.type==='BOSS') {
-            // Slow horizontal wave
             e.y=Math.max(80,Math.min(200,e.y+Math.sin(e.angle*0.3)*40*dt));
         }
         
         if(e.y+e.h>=H-100)endGame();
     });
     
-    // Aliens shoot with PROPER attack patterns
+    // Aliens shoot
     enemies.forEach(e=>{
         if(Math.random()<e.fire*dt*60) {
             const cx=e.x+e.w/2, cy=e.y+e.h;
             const px=player.x+player.w/2;
             
             if(e.type==='SCOUT') {
-                // Basic single shot
                 eBullets.push({x:cx,y:cy,dmg:2,spd:350,type:'normal'});
             } else if(e.type==='ZAP') {
-                // 3 fast projectiles in quick succession with slight delay
+                // 3 projectiles each with RANDOM angle -7° to +7°
                 for(let i=0;i<3;i++) {
+                    const angleRad=(Math.random()*14-7)*Math.PI/180; // Random -7° to +7°
                     setTimeout(()=>{
-                        if(!gameOver)eBullets.push({x:cx,y:cy,dmg:1,spd:500,type:'zap',size:3});
+                        if(!gameOver)eBullets.push({
+                            x:cx,y:cy,dmg:1,spd:500,type:'zap',size:3,
+                            vx:Math.sin(angleRad)*500,
+                            vy:Math.cos(angleRad)*500
+                        });
                     },i*100);
                 }
             } else if(e.type==='TANK') {
-                // Big slow projectile
-                eBullets.push({x:cx,y:cy,dmg:3,spd:220,bombRadius:18,type:'tank',size:8});
+                eBullets.push({x:cx,y:cy,dmg:3,spd:220,bombRadius:25,type:'tank',size:8}); // Increased radius
             } else if(e.type==='SPLITTER') {
-                // Fast single shot
-                eBullets.push({x:cx,y:cy,dmg:2,spd:480,type:'fast',size:5});
-            } else if(e.type==='BOMBER') {
-                // Heavy bomb
-                eBullets.push({x:cx,y:cy,dmg:4,spd:200,bombRadius:20,type:'bomb',size:10});
-            } else if(e.type==='ELITE') {
-                // 3 homing spread shots at ANGLES
-                for(let i=-1;i<=1;i++) {
-                    const angle=i*0.3; // 0.3 radians spread
-                    eBullets.push({
-                        x:cx,y:cy,dmg:3,spd:450,
-                        homing:true,maxDeviation:0.5,
-                        vx:Math.sin(angle)*100,
-                        angle:angle,
-                        type:'elite',size:6
-                    });
+                // Shoot 2 projectiles!
+                for(let j=0;j<2;j++) {
+                    const angleRad=(Math.random()*30-15)*Math.PI/180;
+                    setTimeout(()=>{
+                        if(!gameOver) eBullets.push({
+                            x:cx,y:cy,dmg:2,spd:480,type:'fast',size:5,
+                            vx:Math.sin(angleRad)*480,
+                            vy:Math.cos(angleRad)*480
+                        });
+                    },j*80);
                 }
+            } else if(e.type==='BOMBER') {
+                // FAST DEADLY bombs that DECIMATE shields!
+                eBullets.push({x:cx,y:cy,dmg:5,spd:450,bombRadius:35,type:'bomb',size:12,shake:18});
+                // Also shoot waves of small projectiles
+                if(Math.random()<0.5) {
+                    const count=5+Math.floor(Math.random()*6); // 5-10 projectiles
+                    for(let j=0;j<count;j++) {
+                        const spread=(j-count/2)*0.15;
+                        setTimeout(()=>{
+                            if(!gameOver) eBullets.push({
+                                x:cx,y:cy,dmg:1,spd:520,type:'bomberWave',size:4,
+                                vx:Math.sin(spread)*520,
+                                vy:Math.cos(spread)*520
+                            });
+                        },j*50);
+                    }
+                }
+            } else if(e.type==='ELITE') {
+                // CHARGED projectiles - stay attached during charge!
+                const leftX=cx-e.w*0.5;
+                const rightX=cx+e.w*0.5;
+                
+                const chargeTime=0.6;
+                const charging1={
+                    x:leftX,y:cy,attached:true,attachX:-e.w*0.5,
+                    chargeProgress:0,maxCharge:chargeTime,
+                    parentAlien:e,type:'eliteCharging',size:7,
+                    startTime:performance.now()
+                };
+                const charging2={
+                    x:rightX,y:cy,attached:true,attachX:e.w*0.5,
+                    chargeProgress:0,maxCharge:chargeTime,
+                    parentAlien:e,type:'eliteCharging',size:7,
+                    startTime:performance.now()
+                };
+                
+                eBullets.push(charging1);
+                eBullets.push(charging2);
+                
+                // Launch after charge completes
+                setTimeout(()=>{
+                    if(!gameOver && e.alive!==false) {
+                        // PROPERLY remove charging projectiles by marking them
+                        charging1.shouldRemove=true;
+                        charging2.shouldRemove=true;
+                        
+                        const currentCX=e.x+e.w/2, currentCY=e.y+e.h;
+                        const leftAngle=-0.5;
+                        const rightAngle=0.5;
+                        
+                        // Explosion particles
+                        for(let j=0;j<15;j++) {
+                            const ang=Math.random()*Math.PI*2;
+                            particles.push({
+                                x:currentCX-e.w*0.5,y:currentCY,
+                                vx:Math.cos(ang)*150,vy:Math.sin(ang)*150,
+                                life:0.6,sz:3,col:'#ff8800'
+                            });
+                            particles.push({
+                                x:currentCX+e.w*0.5,y:currentCY,
+                                vx:Math.cos(ang)*150,vy:Math.sin(ang)*150,
+                                life:0.6,sz:3,col:'#ff8800'
+                            });
+                        }
+                        
+                        // Launch projectiles
+                        eBullets.push({
+                            x:currentCX-e.w*0.5,y:currentCY,dmg:2,
+                            vx:Math.sin(leftAngle)*600,
+                            vy:Math.cos(leftAngle)*600,
+                            homing:true,homingRadius:250, // Activation radius!
+                            maxDeviation:0.4,homingStr:230,
+                            angle:leftAngle,
+                            type:'elite',size:8,glow:true
+                        });
+                        
+                        eBullets.push({
+                            x:currentCX+e.w*0.5,y:currentCY,dmg:2,
+                            vx:Math.sin(rightAngle)*600,
+                            vy:Math.cos(rightAngle)*600,
+                            homing:true,homingRadius:250,
+                            maxDeviation:0.4,homingStr:230,
+                            angle:rightAngle,
+                            type:'elite',size:8,glow:true
+                        });
+                        
+                        tone(1400,0.15,'sine',0.12);
+                        shake(8);
+                    }
+                },chargeTime*1000);
             } else if(e.type==='BOSS') {
                 const pattern=Math.floor(Math.random()*4);
-                if(pattern===0) { // Produce
-                    if(enemies.length<35) {
-                        for(let i=0;i<2;i++) {
-                            const side=i===0?-1:1;
-                            enemies.push(createEnemy('SCOUT',e.x+side*e.w*0.6,e.y+e.h));
+                
+                if(pattern===0) { // 🌟 SPAWN ASSAULT - Spawn 3 random aliens!
+                    if(enemies.length<40) {
+                        // Spawn 3 random alien types (not BOSS)
+                        const spawnTypes=['SCOUT','ZAP','TANK','SPLITTER','BOMBER','ELITE'];
+                        for(let i=0;i<3;i++) {
+                            const randomType=spawnTypes[Math.floor(Math.random()*spawnTypes.length)];
+                            const side=(i-1)*e.w*0.35;
+                            const spawnedAlien=createEnemy(randomType,e.x+side+e.w/2,e.y+e.h);
+                            enemies.push(spawnedAlien);
+                            // Spawn particles
+                            for(let j=0;j<20;j++) {
+                                const ang=Math.random()*Math.PI*2;
+                                particles.push({
+                                    x:spawnedAlien.x+spawnedAlien.w/2,
+                                    y:spawnedAlien.y+spawnedAlien.h/2,
+                                    vx:Math.cos(ang)*180,vy:Math.sin(ang)*180,
+                                    life:0.8,sz:3,col:spawnedAlien.col
+                                });
+                            }
                         }
+                        tone(800,0.2,'square');
+                        tone(600,0.25,'square');
+                        shake(12);
                     }
-                } else if(pattern===1) { // Bombing
-                    for(let i=-2;i<=2;i++) {
-                        eBullets.push({x:cx+i*20,y:cy,dmg:5,spd:180,bombRadius:18,type:'bossBomb',size:12});
+                    
+                } else if(pattern===1) { // 💣 CARPET BOMBING - Wave of bombs!
+                    for(let i=-3;i<=3;i++) {
+                        setTimeout(()=>{
+                            if(!gameOver) {
+                                eBullets.push({
+                                    x:cx+i*25,y:cy,dmg:5,spd:180,
+                                    bombRadius:40,type:'bossBomb',size:14,shake:25
+                                });
+                                tone(300-i*20,0.1,'sawtooth',0.1);
+                            }
+                        },Math.abs(i)*80); // Cascade timing!
                     }
-                } else if(pattern===2) { // Shoot-out - REAL SPREAD
-                    for(let i=-4;i<=4;i++) {
-                        const angle=i*0.25; // Wider spread
-                        eBullets.push({
-                            x:cx,y:cy,dmg:1,spd:550,
-                            vx:Math.sin(angle)*200,
-                            vy:Math.cos(angle)*550,
-                            type:'bossSpread',size:4
-                        });
+                    shake(15);
+                    
+                } else if(pattern===2) { // 🌪️ SPIRAL BARRAGE - Rotating spread!
+                    for(let wave=0;wave<3;wave++) {
+                        setTimeout(()=>{
+                            if(!gameOver) {
+                                const rotation=wave*0.3; // Rotate each wave
+                                for(let i=-5;i<=5;i++) {
+                                    const angle=i*0.22+rotation;
+                                    eBullets.push({
+                                        x:cx,y:cy,dmg:1,spd:580,type:'bossSpread',
+                                        vx:Math.sin(angle)*580,
+                                        vy:Math.cos(angle)*580,
+                                        size:5
+                                    });
+                                }
+                                tone(1200+wave*200,0.1,'sine',0.08);
+                            }
+                        },wave*200);
                     }
-                } else { // Direct shot - Aimed at player
-                    const angle=Math.atan2(player.y-e.y,px-cx);
-                    for(let i=0;i<3;i++) {
-                        eBullets.push({
-                            x:cx,y:cy,dmg:3,spd:500,
-                            vx:Math.sin(angle)*500,
-                            vy:Math.cos(angle)*500,
-                            bombRadius:6,
-                            type:'bossDirect',size:7
-                        });
+                    shake(10);
+                    
+                } else { // 🎯 SNIPER STRIKE - Aimed burst at player!
+                    const px=player.x+player.w/2;
+                    const angleToPlayer=Math.atan2(px-cx,150);
+                    
+                    // Fire 5 projectiles in quick succession
+                    for(let burst=0;burst<5;burst++) {
+                        setTimeout(()=>{
+                            if(!gameOver) {
+                                const spreadAngle=angleToPlayer+(burst-2)*0.08;
+                                eBullets.push({
+                                    x:cx,y:cy,dmg:3,spd:550,
+                                    vx:Math.sin(spreadAngle)*550,
+                                    vy:Math.cos(spreadAngle)*550,
+                                    bombRadius:7,type:'bossDirect',size:9
+                                });
+                                // Red warning particles
+                                for(let j=0;j<8;j++) {
+                                    const ang=Math.random()*Math.PI*2;
+                                    particles.push({
+                                        x:cx,y:cy,
+                                        vx:Math.cos(ang)*100,vy:Math.sin(ang)*100,
+                                        life:0.4,sz:2,col:'#ff0000'
+                                    });
+                                }
+                                tone(1400-burst*50,0.08,'square',0.1);
+                            }
+                        },burst*120); // Rapid fire!
                     }
+                    shake(8);
                 }
             }
         }
@@ -475,20 +698,15 @@ function update(dt) {
             const col=p.type==='heal'?'#ff0000':p.type==='rapid'?'#ffff00':p.type==='shield'?'#00ff00':'#ff00ff';
             parts(p.x,p.y,col,15);
             tone(950,0.25,'sine');
-            if(p.type==='nuke')tone(500,0.8,'sawtooth',0.2);
-            if(p.type==='nuke')tone(500,0.8,'sawtooth',0.2);
             return false;
         }
         return true;
     });
     
-    // Particles
     particles=particles.filter(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=300*dt;p.life-=dt*2.5;return p.life>0;});
     
-    // Shake
     if(shakeInt>0){shakeX=(Math.random()-0.5)*shakeInt;shakeY=(Math.random()-0.5)*shakeInt;shakeInt*=0.85;if(shakeInt<0.1){shakeInt=0;shakeX=shakeY=0;}}
     
-    // Wave clear
     if(enemies.length===0) {wave++;tone(523,0.3,'sine');tone(659,0.3,'sine');spawnWave();}
 }
 
@@ -510,11 +728,9 @@ function draw() {
     ctx.fillStyle='#000';
     ctx.fillRect(0,0,W,H);
     
-    // Stars
     stars.forEach(s=>{ctx.globalAlpha=s.br;ctx.fillStyle='#fff';ctx.fillRect(s.x,s.y,s.sz,s.sz);});
     ctx.globalAlpha=1;
     
-    // Shields - OPTIMIZED with path batching
     ctx.fillStyle='#00ff00';
     ctx.shadowBlur=10;
     ctx.shadowColor='#00ff00';
@@ -525,14 +741,12 @@ function draw() {
     });
     ctx.shadowBlur=0;
     
-    // Player - SLEEK BADASS spaceship
     const px=player.x+player.w/2, py=player.y;
     ctx.fillStyle='#00ff00';
     ctx.shadowBlur=25;
     ctx.shadowColor='#00ff00';
-    // Main body - sharp angular design
     ctx.beginPath();
-    ctx.moveTo(px,py); // Sharp nose
+    ctx.moveTo(px,py);
     ctx.lineTo(px-14,py+12);
     ctx.lineTo(px-10,py+18);
     ctx.lineTo(px-6,py+28);
@@ -541,7 +755,6 @@ function draw() {
     ctx.lineTo(px+14,py+12);
     ctx.closePath();
     ctx.fill();
-    // Wing details
     ctx.fillStyle='#00ffff';
     ctx.beginPath();
     ctx.moveTo(px-14,py+12);
@@ -557,12 +770,10 @@ function draw() {
     ctx.lineTo(px+10,py+18);
     ctx.closePath();
     ctx.fill();
-    // Cockpit glow
     ctx.fillStyle='#ffffff';
     ctx.beginPath();
     ctx.arc(px,py+8,3,0,Math.PI*2);
     ctx.fill();
-    // Engine glows
     ctx.fillStyle='#00ffff';
     ctx.shadowBlur=20;
     ctx.shadowColor='#00ffff';
@@ -573,7 +784,6 @@ function draw() {
     }
     ctx.shadowBlur=0;
     
-    // Bullets
     bullets.forEach(b=>{
         ctx.fillStyle=b.boosted?'#ff00ff':(rapidFire?'#ffff00':'#00ffff');
         ctx.shadowBlur=10;
@@ -582,12 +792,46 @@ function draw() {
     });
     ctx.shadowBlur=0;
     
-    // Enemy bullets - COOL AS FUCK
     eBullets.forEach(b=>{
         const sz=b.size||4;
         
-        if(b.type==='zap') {
-            // Small fast cyan bolts
+        if(b.type==='eliteCharging') {
+            // CHARGING visual - pulses and grows!
+            const chargePct=Math.min(1,b.chargeProgress/b.maxCharge);
+            const pulse=Math.sin(performance.now()/30)*0.3+0.7;
+            const chargeSize=sz*(0.5+chargePct*0.8); // Grows as charges
+            
+            ctx.fillStyle='#ff8800';
+            ctx.shadowBlur=(20+chargePct*30)*pulse; // Brighter as charges
+            ctx.shadowColor='#ff8800';
+            
+            // Outer charging ring
+            ctx.globalAlpha=0.4+chargePct*0.4;
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,chargeSize*3*pulse,0,Math.PI*2);
+            ctx.fill();
+            ctx.globalAlpha=1;
+            
+            // Main orb
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,chargeSize,0,Math.PI*2);
+            ctx.fill();
+            
+            // Bright core (grows)
+            ctx.fillStyle='#ffffff';
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,chargeSize*0.6*chargePct,0,Math.PI*2);
+            ctx.fill();
+            
+            // Energy ring
+            ctx.strokeStyle='#ffff00';
+            ctx.lineWidth=2+chargePct*2;
+            ctx.globalAlpha=pulse*chargePct;
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,chargeSize*2,0,Math.PI*2);
+            ctx.stroke();
+            ctx.globalAlpha=1;
+        } else if(b.type==='zap') {
             ctx.fillStyle='#00ffff';
             ctx.shadowBlur=15;
             ctx.shadowColor='#00ffff';
@@ -596,42 +840,60 @@ function draw() {
             ctx.fillRect(b.x-sz,b.y-4,sz*2,12);
             ctx.globalAlpha=1;
         } else if(b.type==='tank'||b.type==='bomb'||b.type==='bossBomb') {
-            // Heavy bombs
             const col=b.type==='bossBomb'?'#ffffff':b.type==='bomb'?'#ff00ff':'#ff6600';
             ctx.fillStyle=col;
-            ctx.shadowBlur=20;
+            ctx.shadowBlur=25;
             ctx.shadowColor=col;
             ctx.beginPath();
             ctx.arc(b.x,b.y,sz,0,Math.PI*2);
             ctx.fill();
-            ctx.globalAlpha=0.3;
+            // Larger glow for big bombs
+            ctx.globalAlpha=0.4;
             ctx.beginPath();
-            ctx.arc(b.x,b.y,sz*2,0,Math.PI*2);
+            ctx.arc(b.x,b.y,sz*2.5,0,Math.PI*2);
             ctx.fill();
             ctx.globalAlpha=1;
         } else if(b.type==='elite') {
-            // Homing orange projectiles
+            // GLOWING charged projectiles!
+            const pulse=Math.sin(performance.now()/50)*0.3+0.7;
             ctx.fillStyle='#ff8800';
-            ctx.shadowBlur=18;
+            ctx.shadowBlur=30*pulse;
             ctx.shadowColor='#ff8800';
-            // Trail
-            ctx.globalAlpha=0.6;
-            for(let i=1;i<=3;i++) {
+            // Glowing trail
+            ctx.globalAlpha=0.7;
+            for(let i=1;i<=4;i++) {
                 ctx.beginPath();
-                ctx.arc(b.x,b.y+i*5,sz-i,0,Math.PI*2);
+                ctx.arc(b.x,b.y+i*6,sz-i*0.5,0,Math.PI*2);
                 ctx.fill();
             }
             ctx.globalAlpha=1;
-            // Main
+            // Main projectile
             ctx.beginPath();
             ctx.arc(b.x,b.y,sz,0,Math.PI*2);
             ctx.fill();
+            // Bright core
             ctx.fillStyle='#ffffff';
             ctx.beginPath();
-            ctx.arc(b.x,b.y,sz*0.4,0,Math.PI*2);
+            ctx.arc(b.x,b.y,sz*0.5,0,Math.PI*2);
             ctx.fill();
+            // Outer glow ring
+            ctx.strokeStyle='#ff8800';
+            ctx.lineWidth=2;
+            ctx.globalAlpha=pulse;
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz*1.5,0,Math.PI*2);
+            ctx.stroke();
+            ctx.globalAlpha=1;
+        } else if(b.type==='bomberWave') {
+            // Small fast magenta projectiles
+            ctx.fillStyle='#ff00ff';
+            ctx.shadowBlur=12;
+            ctx.shadowColor='#ff00ff';
+            ctx.fillRect(b.x-sz/2,b.y-sz/2,sz,sz);
+            ctx.globalAlpha=0.5;
+            ctx.fillRect(b.x-sz,b.y-sz,sz*2,sz*2);
+            ctx.globalAlpha=1;
         } else if(b.type==='bossSpread') {
-            // Fast spread shots
             ctx.fillStyle='#ffffff';
             ctx.shadowBlur=12;
             ctx.shadowColor='#ffffff';
@@ -640,7 +902,6 @@ function draw() {
             ctx.fillRect(b.x-sz,b.y-sz,sz*2,sz*3);
             ctx.globalAlpha=1;
         } else if(b.type==='bossDirect') {
-            // Aimed deadly shots
             ctx.fillStyle='#ff0000';
             ctx.shadowBlur=20;
             ctx.shadowColor='#ff0000';
@@ -650,13 +911,11 @@ function draw() {
             ctx.fillStyle='#ffffff';
             ctx.fillRect(b.x-1,b.y-sz,2,sz*2);
         } else if(b.type==='fast') {
-            // Splitter fast shot
             ctx.fillStyle='#ffff00';
             ctx.shadowBlur=15;
             ctx.shadowColor='#ffff00';
             ctx.fillRect(b.x-sz/2,b.y,sz,12);
         } else {
-            // Normal shots
             ctx.fillStyle='#ff0000';
             ctx.shadowBlur=12;
             ctx.shadowColor='#ff0000';
@@ -666,151 +925,147 @@ function draw() {
         ctx.globalAlpha=1;
     });
     
-    // Enemies - COOL but recognizable designs
+    // CLASSIC SPACE INVADERS ALIENS - EXACTLY like the reference
     enemies.forEach(e=>{
         const cx=e.x+e.w/2, cy=e.y+e.h/2, s=e.w;
-        const pulse=Math.sin(performance.now()/200+e.x)*0.15+0.85;
+        const px=s/11; // Pixel size
         
         ctx.fillStyle=e.col;
-        ctx.shadowBlur=18*pulse;
+        ctx.shadowBlur=15;
         ctx.shadowColor=e.col;
         
-        if(e.type==='BOSS') {
-            // BOSS - Massive carrier mothership (8-bit)
-            const px=5.5, py=4;
-            // Main body
-            ctx.fillRect(cx-px*3,cy-py*1.5,px*6,py*3);
-            // Bridge tower
-            ctx.fillRect(cx-px*1,cy-py*3,px*2,py*1.5);
-            // Top turrets (AA)
-            ctx.fillRect(cx-px*2.5,cy-py*2.5,px,py*0.75);
-            ctx.fillRect(cx+px*1.5,cy-py*2.5,px,py*0.75);
-            // Side sections
-            ctx.fillRect(cx-px*3.5,cy-py*0.5,px,py*2);
-            ctx.fillRect(cx+px*2.5,cy-py*0.5,px,py*2);
-            // Engine ports
-            ctx.fillRect(cx-px*2,cy+py*1.5,px,py);
-            ctx.fillRect(cx-px*0.2,cy+py*1.5,px,py);
-            ctx.fillRect(cx+px*1.8,cy+py*1.5,px,py);
-            // Weapon bay (bottom)
-            ctx.fillRect(cx-px*1.5,cy+py*2.5,px*3,py*0.75);
-            // Eyes
-            ctx.fillStyle='#000';
-            ctx.fillRect(cx-px*0.6,cy-py*0.5,px*0.5,py*0.6);
-            ctx.fillRect(cx+px*0.1,cy-py*0.5,px*0.5,py*0.6);
-            ctx.fillStyle=e.col;
-        } else if(e.type==='SCOUT') {
-            // SCOUT - Classic squid invader (8-bit)
-            const px=4, py=3; // Pixel size
+        if(e.type==='SCOUT') {
+            // Top row - squid (3 bumps on top)
+            ctx.fillRect(cx-px*3,cy-px*5,px,px);
+            ctx.fillRect(cx-px,cy-px*5,px,px);
+            ctx.fillRect(cx+px*2,cy-px*5,px,px);
             // Head
-            ctx.fillRect(cx-px*2,cy-py*3,px*4,py*2);
-            ctx.fillRect(cx-px*3,cy-py*1.5,px*6,py*2);
+            ctx.fillRect(cx-px*4,cy-px*4,px*8,px*2);
+            ctx.fillRect(cx-px*5,cy-px*2,px*10,px*2);
             // Body
-            ctx.fillRect(cx-px*2.5,cy+py*0.5,px*5,py*2);
+            ctx.fillRect(cx-px*4,cy,px*8,px*2);
             // Side fins
-            ctx.fillRect(cx-px*4,cy-py*0.5,px,py*2.5);
-            ctx.fillRect(cx+px*3,cy-py*0.5,px,py*2.5);
+            ctx.fillRect(cx-px*6,cy-px*1,px,px*3);
+            ctx.fillRect(cx+px*5,cy-px*1,px,px*3);
             // Eyes
             ctx.fillStyle='#000';
-            ctx.fillRect(cx-px*1.5,cy-py*1.5,px,py);
-            ctx.fillRect(cx+px*0.5,cy-py*1.5,px,py);
-            ctx.fillStyle=e.col;
+            ctx.fillRect(cx-px*2.5,cy-px*2,px,px);
+            ctx.fillRect(cx+px*1.5,cy-px*2,px,px);
         } else if(e.type==='ZAP') {
-            // ZAP - Classic crab invader (8-bit)
-            const px=3.5, py=3;
-            // Main body
-            ctx.fillRect(cx-px*2,cy-py*2,px*4,py*2);
-            ctx.fillRect(cx-px*2.5,cy,px*5,py*1.5);
-            // Side arms
-            ctx.fillRect(cx-px*3.5,cy-py,px,py*3);
-            ctx.fillRect(cx+px*2.5,cy-py,px,py*3);
+            // Middle row - crab
+            ctx.fillStyle=e.col;
             // Top bumps
-            ctx.fillRect(cx-px*1.5,cy-py*3,px,py);
-            ctx.fillRect(cx+px*0.5,cy-py*3,px,py);
+            ctx.fillRect(cx-px*3,cy-px*5,px,px);
+            ctx.fillRect(cx+px*2,cy-px*5,px,px);
+            // Head
+            ctx.fillRect(cx-px*4,cy-px*4,px*8,px*2);
+            ctx.fillRect(cx-px*4.5,cy-px*2,px*9,px*2);
+            // Body
+            ctx.fillRect(cx-px*3.5,cy,px*7,px*2);
+            // Claws
+            ctx.fillRect(cx-px*5.5,cy-px*2,px,px*4);
+            ctx.fillRect(cx+px*4.5,cy-px*2,px,px*4);
             // Eyes
             ctx.fillStyle='#000';
-            ctx.fillRect(cx-px*0.8,cy-py*1.5,px*0.6,py*0.6);
-            ctx.fillRect(cx+px*0.2,cy-py*1.5,px*0.6,py*0.6);
-            ctx.fillStyle=e.col;
-        } else if(e.type==='TANK') {
-            // TANK - Heavy invader (8-bit)
-            const px=4, py=3;
-            // Main body
-            ctx.fillRect(cx-px*2,cy-py*1.5,px*4,py*3);
-            // Top section
-            ctx.fillRect(cx-px*1.5,cy-py*2.5,px*3,py);
-            // Side cannons
-            ctx.fillRect(cx-px*2.5,cy-py*0.5,px,py*2);
-            ctx.fillRect(cx+px*1.5,cy-py*0.5,px,py*2);
-            // Center cannon
-            ctx.fillRect(cx-px*0.5,cy-py*2.5,px,py*1.5);
-            // Eyes
-            ctx.fillStyle='#000';
-            ctx.fillRect(cx-px*0.8,cy-py*0.5,px*0.6,py*0.6);
-            ctx.fillRect(cx+px*0.2,cy-py*0.5,px*0.6,py*0.6);
-            ctx.fillStyle=e.col;
+            ctx.fillRect(cx-px*2,cy-px*2,px,px);
+            ctx.fillRect(cx+px,cy-px*2,px,px);
         } else if(e.type==='SPLITTER') {
-            // SPLITTER - Ghost UFO (8-bit)
-            const px=4, py=3;
-            // Main body (half circle look)
-            ctx.fillRect(cx-px*2,cy-py*1.5,px*4,py*1.5);
-            ctx.fillRect(cx-px*2.5,cy,px*5,py*1.5);
-            // Bumps on top
-            ctx.fillRect(cx-px*2,cy-py*2,px,py*0.75);
-            ctx.fillRect(cx-px*0.5,cy-py*2,px,py*0.75);
-            ctx.fillRect(cx+px*1,cy-py*2,px,py*0.75);
-            // Bottom tendrils
-            ctx.fillRect(cx-px*1.5,cy+py*1.5,px*0.8,py);
-            ctx.fillRect(cx+px*0.7,cy+py*1.5,px*0.8,py);
+            // Bottom row - octopus
+            ctx.fillStyle=e.col;
+            // Head bumps
+            ctx.fillRect(cx-px*3.5,cy-px*4,px,px);
+            ctx.fillRect(cx-px*1,cy-px*4,px,px);
+            ctx.fillRect(cx+px*2.5,cy-px*4,px,px);
+            // Head
+            ctx.fillRect(cx-px*4,cy-px*3,px*8,px*2);
+            ctx.fillRect(cx-px*5,cy-px*1,px*10,px*2);
+            // Body
+            ctx.fillRect(cx-px*4,cy+px,px*8,px*2);
+            // Bottom tentacles
+            ctx.fillRect(cx-px*3.5,cy+px*3,px,px*2);
+            ctx.fillRect(cx+px*2.5,cy+px*3,px,px*2);
             // Eyes
             ctx.fillStyle='#000';
-            ctx.fillRect(cx-px*0.8,cy-py*0.3,px*0.6,py*0.6);
-            ctx.fillRect(cx+px*0.2,cy-py*0.3,px*0.6,py*0.6);
+            ctx.fillRect(cx-px*2.5,cy-px,px,px);
+            ctx.fillRect(cx+px*1.5,cy-px,px,px);
+        } else if(e.type==='TANK') {
+            // Tank version - bigger, armored
             ctx.fillStyle=e.col;
-        } else if(e.type==='BOMBER') {
-            // BOMBER - Large mothership (8-bit)
-            const px=4.5, py=3;
-            // Main body
-            ctx.fillRect(cx-px*2.5,cy-py,px*5,py*2);
-            // Top section
-            ctx.fillRect(cx-px*2,cy-py*2.5,px*4,py*1);
-            // Cargo sections
-            ctx.fillRect(cx-px*2,cy+py*1,px*1.2,py);
-            ctx.fillRect(cx-px*0.3,cy+py*1,px*1.2,py);
-            ctx.fillRect(cx+px*1.3,cy+py*1,px*1.2,py);
-            // Bottom thrusters
-            ctx.fillRect(cx-px*1.8,cy+py*2,px,py*0.8);
-            ctx.fillRect(cx+px*0.8,cy+py*2,px,py*0.8);
-            // Eyes
-            ctx.fillStyle='#000';
-            ctx.fillRect(cx-px*0.8,cy-py*0.3,px*0.6,py*0.6);
-            ctx.fillRect(cx+px*0.2,cy-py*0.3,px*0.6,py*0.6);
-            ctx.fillStyle=e.col;
-        } else if(e.type==='ELITE') {
-            // ELITE - Advanced fighter (8-bit)
-            const px=3.5, py=3;
-            // Main body
-            ctx.fillRect(cx-px*2,cy-py,px*4,py*2);
+            // Turret
+            ctx.fillRect(cx-px*2,cy-px*5,px*4,px);
             // Top armor
-            ctx.fillRect(cx-px*1.5,cy-py*2.5,px*3,py*0.75);
-            // Wings
-            ctx.fillRect(cx-px*3,cy-py*0.5,px*0.8,py*2);
-            ctx.fillRect(cx+px*2.2,cy-py*0.5,px*0.8,py*2);
-            // Center spike
-            ctx.fillRect(cx-px*0.4,cy-py*2.5,px*0.8,py);
-            // Bottom thrusters
-            ctx.fillRect(cx-px*1.2,cy+py*1,px,py*0.75);
-            ctx.fillRect(cx+px*0.2,cy+py*1,px,py*0.75);
+            ctx.fillRect(cx-px*4,cy-px*4,px*8,px*2);
+            // Main body
+            ctx.fillRect(cx-px*5,cy-px*2,px*10,px*3);
+            // Side cannons
+            ctx.fillRect(cx-px*6,cy-px*1,px,px*2);
+            ctx.fillRect(cx+px*5,cy-px*1,px,px*2);
+            // Lower armor
+            ctx.fillRect(cx-px*4,cy+px,px*8,px*2);
             // Eyes
             ctx.fillStyle='#000';
-            ctx.fillRect(cx-px*0.8,cy-py*0.3,px*0.6,py*0.6);
-            ctx.fillRect(cx+px*0.2,cy-py*0.3,px*0.6,py*0.6);
+            ctx.fillRect(cx-px*2,cy-px*1,px,px);
+            ctx.fillRect(cx+px,cy-px*1,px,px);
+        } else if(e.type==='BOMBER') {
+            // Bomber - UFO style
             ctx.fillStyle=e.col;
+            // Dome top
+            ctx.fillRect(cx-px*2,cy-px*5,px*4,px);
+            ctx.fillRect(cx-px*3,cy-px*4,px*6,px);
+            // Main saucer
+            ctx.fillRect(cx-px*5,cy-px*3,px*10,px*2);
+            ctx.fillRect(cx-px*6,cy-px*1,px*12,px*2);
+            // Bottom weapons
+            ctx.fillRect(cx-px*4,cy+px,px*2,px*2);
+            ctx.fillRect(cx-px*1,cy+px,px*2,px*2);
+            ctx.fillRect(cx+px*2,cy+px,px*2,px*2);
+            // Windows
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px*2,cy-px*2,px,px);
+            ctx.fillRect(cx+px,cy-px*2,px,px);
+        } else if(e.type==='ELITE') {
+            // Elite fighter
+            ctx.fillStyle=e.col;
+            // Cockpit spike
+            ctx.fillRect(cx-px*0.5,cy-px*5,px,px);
+            // Head
+            ctx.fillRect(cx-px*3,cy-px*4,px*6,px);
+            ctx.fillRect(cx-px*4,cy-px*3,px*8,px*2);
+            // Main body
+            ctx.fillRect(cx-px*3.5,cy-px*1,px*7,px*3);
+            // Wings
+            ctx.fillRect(cx-px*5.5,cy-px*0.5,px,px*3);
+            ctx.fillRect(cx+px*4.5,cy-px*0.5,px,px*3);
+            // Engine ports
+            ctx.fillRect(cx-px*2.5,cy+px*2,px,px);
+            ctx.fillRect(cx+px*1.5,cy+px*2,px,px);
+            // Eyes
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px*1.5,cy-px*1,px,px);
+            ctx.fillRect(cx+px*0.5,cy-px*1,px,px);
+        } else if(e.type==='BOSS') {
+            // Boss mothership
+            ctx.fillStyle=e.col;
+            // Bridge tower
+            ctx.fillRect(cx-px*2,cy-px*6,px*4,px*2);
+            // Main deck
+            ctx.fillRect(cx-px*6,cy-px*4,px*12,px*3);
+            // Hull
+            ctx.fillRect(cx-px*7,cy-px*1,px*14,px*4);
+            // Side wings
+            ctx.fillRect(cx-px*8,cy,px,px*3);
+            ctx.fillRect(cx+px*7,cy,px,px*3);
+            // Weapons
+            ctx.fillRect(cx-px*5,cy+px*3,px*2,px);
+            ctx.fillRect(cx-px*1,cy+px*3,px*2,px);
+            ctx.fillRect(cx+px*3,cy+px*3,px*2,px);
+            // Bridge windows
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px,cy-px*5,px*2,px);
         }
         
         ctx.shadowBlur=0;
         
-        // HP bar
         if(e.hp<e.maxHp) {
             const bw=e.w-8;
             ctx.fillStyle='#600';
@@ -820,7 +1075,6 @@ function draw() {
         }
     });
     
-    // Powerups
     powerups.forEach(p=>{
         const col=p.type==='heal'?'#ff0000':p.type==='rapid'?'#ffff00':p.type==='shield'?'#00ff00':'#ff00ff';
         ctx.fillStyle=col;
@@ -830,20 +1084,19 @@ function draw() {
         ctx.shadowBlur=0;
     });
     
-    // Particles
     particles.forEach(p=>{ctx.globalAlpha=p.life;ctx.fillStyle=p.col;ctx.fillRect(p.x-p.sz/2,p.y-p.sz/2,p.sz,p.sz);});
     ctx.globalAlpha=1;
     
     ctx.restore();
 }
 
-// Controls
 document.addEventListener('keydown',e=>{
     keys[e.key]=true;
     if(e.key===' '&&!gameOver&&!spacePressed&&bullets.length<(rapidFire?8:5)) {
         spacePressed=true;
         bullets.push({x:player.x+player.w/2,y:player.y,boosted:projectileBoost});
-        tone(1000,0.1);
+        // Varied pitch shooting sound! (900-1100Hz)
+        tone(900+Math.random()*200,0.08,'square',0.08);
     }
 });
 document.addEventListener('keyup',e=>{
@@ -851,7 +1104,6 @@ document.addEventListener('keyup',e=>{
     if(e.key===' ')spacePressed=false;
 });
 
-// Loop
 let lastTime=performance.now();
 function loop(t) {
     const dt=Math.min((t-lastTime)/1000,0.1);
