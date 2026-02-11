@@ -61,16 +61,6 @@ const GAMES = [
         color: '#5d00ff',
         year: 'February 8th, 2026',
         releaseDate: '2026-02-08'
-    },
-    {
-        id: 'game-placeholder',
-        title: 'PLACEHOLDER',
-        description: 'placeholder description',
-        logo: 'assets/games/placeholder/logo.png',
-        path: 'games/placeholder/index.html',
-        color: '#00fc87',
-        year: 'February 10th, 2026',
-        releaseDate: '2026-02-10'
     }
 ];
     // 🎯 ADD MORE GAMES HERE - Just copy the format above
