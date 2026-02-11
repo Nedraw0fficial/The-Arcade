@@ -57,7 +57,7 @@ const GAMES = [
         title: 'SPACE INVADERS',
         description: 'Defend Earth from alien invaders',
         logo: 'assets/games/space-invaders/logo.png',
-        path: 'games/space-invaders/index.html',
+        path: 'games/space-invaders/indexV2.html',
         color: '#5d00ff',
         year: 'February 8th, 2026',
         releaseDate: '2026-02-08'
@@ -72,7 +72,7 @@ function isGameNew(releaseDate) {
     const now = new Date();
     const daysDiff = (now - release) / (1000 * 60 * 60 * 24);
     
-    return daysDiff >= 0 && daysDiff <= 3;
+    return daysDiff >= 0 && daysDiff <= 4; // changed tp 4 days to give a bit more time for the "New!" badge to show up
 }
 
 // Get game by ID

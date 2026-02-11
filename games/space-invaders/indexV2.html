@@ -1,0 +1,2488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GALACTIC INVADERS</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; }
+        body { background: #0a0a0f; display: flex; align-items: center; justify-content: center; font-family: 'Courier New', monospace; }
+        .wrap { position: relative; }
+        canvas { display: block; background: #000; border: 3px solid #00ff00; box-shadow: 0 0 30px rgba(0,255,0,0.5); image-rendering: pixelated; }
+        .ui { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 40px; font-size: 18px; color: #00ff00; text-shadow: 0 0 8px #00ff00; z-index: 10; }
+        .hp-bar { position: absolute; top: 15px; left: 20px; width: 250px; height: 18px; background: #300; border: 2px solid #00ff00; z-index: 10; }
+        .hp-fill { height: 100%; background: linear-gradient(90deg, #ff0000, #ffff00, #00ff00); box-shadow: 0 0 10px #00ff00; transition: width 0.3s; }
+        .over { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.95); padding: 50px 70px; border: 3px solid #ff0000; box-shadow: 0 0 40px rgba(255,0,0,0.6); text-align: center; display: none; z-index: 20; border-radius: 8px; }
+        .over h2 { font-size: 40px; color: #ff0000; text-shadow: 0 0 20px #ff0000; margin-bottom: 20px; }
+        .over p { font-size: 20px; color: #00ffff; text-shadow: 0 0 10px #00ffff; margin-bottom: 30px; }
+        .over button { background: transparent; border: 2px solid #00ff00; color: #00ff00; padding: 15px 40px; font-size: 18px; cursor: pointer; font-family: 'Courier New'; text-shadow: 0 0 5px #00ff00; transition: all 0.3s; border-radius: 4px; }
+        .over button:hover { background: #00ff00; color: #000; transform: scale(1.05); }
+        .wave { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 56px; color: #00ffff; text-shadow: 0 0 30px #00ffff; z-index: 15; display: none; animation: w 2s; }
+        @keyframes w { 0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); } 50% { opacity: 1; transform: translate(-50%, -50%) scale(1.3); } }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="ui">
+            <div>SCORE: <span id="s">0</span></div>
+            <div>HIGH: <span id="h">0</span></div>
+            <div>WAVE: <span id="w">1</span></div>
+        </div>
+        <canvas id="c"></canvas>
+        <div class="hp-bar"><div class="hp-fill" id="hp" style="width:100%"></div></div>
+        <div class="wave" id="wt">WAVE 1</div>
+        <div class="over" id="over">
+            <h2>GAME OVER</h2>
+            <p id="fs">FINAL SCORE: 0</p>
+            <button onclick="restart()">PLAY AGAIN</button>
+        </div>
+    </div>
+    <script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+const W=900, H=700;
+c.width=W; c.height=H;
+
+function resize() {
+    const scale = Math.min(window.innerWidth/W, window.innerHeight/H)*0.95;
+    c.style.width=(W*scale)+'px';
+    c.style.height=(H*scale)+'px';
+}
+resize();
+window.addEventListener('resize',resize);
+
+// Types with EXACT specs - INCREASED ATTACK RATES
+const TYPES = {
+    SCOUT: {hp:1,col:'#39FF14',sz:38,pts:10,dmg:1,fire:0.002,wt:100},
+    ZAP: {hp:1,col:'#00ffff',sz:32,pts:25,dmg:1,fire:0.0006,wt:35},
+    TANK: {hp:5,col:'#ff0000',sz:52,pts:50,dmg:3,fire:0.0004,wt:15},
+    SPLITTER: {hp:2,col:'#ffff00',sz:40,pts:40,dmg:1,fire:0.0012,wt:25,split:true},
+    BOMBER: {hp:3,col:'#ff00ff',sz:46,pts:60,dmg:5,fire:0.0008,wt:10},
+    ELITE: {hp:4,col:'#ff8800',sz:44,pts:100,dmg:2,fire:0.0012,wt:5},
+    BOSS: {hp:60,col:'#ffffff',sz:80,pts:500,dmg:5,fire:0.0025,wt:1}, // 6x HP! Faster attacks!
+    // 🌟 NEW ALIENS! 🌟
+    SWARM: {hp:1,col:'#FFA500',sz:28,pts:5,dmg:1,fire:0.0015,wt:50}, // Tiny, fast (was 24)
+    SWARM_LEADER: {hp:2,col:'#FFA500',sz:46,pts:25,dmg:1,fire:0.001,wt:0,leader:true}, // Leader! (was 42)
+    MEDIC: {hp:4,col:'#00FF88',sz:36,pts:120,dmg:0,fire:0,wt:8,healer:true}, // Support
+    PHANTOM: {hp:2,col:'#9D00FF',sz:36,pts:80,dmg:2,fire:0.001,wt:12,teleporter:true}, // Teleporter (was 30)
+    CARRIER: {hp:8,col:'#8B00FF',sz:56,pts:150,dmg:4,fire:0.0006,wt:6,producer:true}, // Factory
+    WARPER: {hp:5,col:'#00BFFF',sz:42,pts:140,dmg:3,fire:0.0008,wt:7,gravity:true}, // Bender
+    FORTRESS: {hp:12,col:'#8B0000',sz:60,pts:200,dmg:5,fire:0.0003,wt:4,armored:true} // Tank
+};
+
+let player,bullets,eBullets,enemies,particles,stars,shields,powerups;
+let score,high,wave,hp,gameOver,keys,moveDir,moveTimer,dropDist;
+let shakeX,shakeY,shakeInt,rapidFire,rapidTimer,projectileBoost,boostTimer,spacePressed;
+
+let audioCtx;
+function initAudio(){audioCtx=new(window.AudioContext||window.webkitAudioContext)();}
+function tone(f,d,t='square',v=0.1){
+    if(!audioCtx)initAudio();
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.connect(g);g.connect(audioCtx.destination);
+    o.frequency.value=f;o.type=t;
+    g.gain.setValueAtTime(v,audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.01,audioCtx.currentTime+d);
+    o.start();o.stop(audioCtx.currentTime+d);
+}
+
+function init() {
+    player={x:450,y:650,w:45,h:28,spd:450,dx:0,hp:10,maxHp:10};
+    bullets=[]; eBullets=[]; enemies=[]; particles=[]; powerups=[];
+    stars=[]; score=0; high=parseInt(localStorage.getItem('inv-high'))||0;
+    wave=1; hp=10; gameOver=false; keys={}; moveDir=1; moveTimer=0; dropDist=25;
+    shakeX=shakeY=shakeInt=0; rapidFire=false; rapidTimer=0; projectileBoost=false; boostTimer=0; spacePressed=false;
+    
+    for(let i=0;i<120;i++) stars.push({x:Math.random()*W,y:Math.random()*H,sz:1+Math.random()*2,spd:0.3+Math.random(),br:0.3+Math.random()*0.7});
+    
+    // Shields - PROPERLY CENTERED
+    shields=[];
+    const sy=580;
+    const shieldW=90;
+    // Center 3 shields with proper spacing
+    const shield1X=(W/2)-shieldW/2-180; // Left shield
+    const shield2X=(W/2)-shieldW/2;      // Center shield
+    const shield3X=(W/2)-shieldW/2+180;  // Right shield
+    
+    for(let i=0;i<3;i++) {
+        const sx=[shield1X,shield2X,shield3X][i];
+        const shield={x:sx,y:sy,w:shieldW,h:55,pix:[]};
+        for(let y=0;y<shield.h;y++) {
+            shield.pix[y]=[];
+            for(let x=0;x<shield.w;x++) {
+                const dx=(x-shield.w/2)/(shield.w/2);
+                const dy=y/shield.h;
+                const curve = dy<0.5 ? Math.sqrt(1-dx*dx) : 1;
+                shield.pix[y][x] = (dy<0.5 ? (1-dy/0.5)<curve : dy<0.7) ? 1:0;
+            }
+        }
+        shields.push(shield);
+    }
+    
+    document.getElementById('h').textContent=high;
+    spawnWave();
+}
+
+function spawnWave() {
+    enemies=[];
+    const isBoss = wave%7===0; // Boss every 7 waves!
+    
+    // Determine which cycle we're in (0-based)
+    const cycle = Math.floor((wave-1)/7); // 0 for waves 1-6, 1 for 8-13, etc.
+    const waveInCycle = ((wave-1)%7)+1; // 1-6 within cycle, or 7 for boss
+    
+    // Unlock aliens based on completed boss waves (every 7 waves)
+    const unlockedTypes = ['SCOUT', 'SPLITTER'];
+    if(cycle>=1) unlockedTypes.push('ZAP');         // After wave 7
+    if(cycle>=2) unlockedTypes.push('TANK','SWARM');  // After wave 14
+    if(cycle>=3) unlockedTypes.push('BOMBER','MEDIC'); // After wave 21
+    if(cycle>=4) unlockedTypes.push('ELITE','PHANTOM'); // After wave 28
+    if(cycle>=5) unlockedTypes.push('CARRIER','WARPER'); // After wave 35
+    if(cycle>=6) unlockedTypes.push('FORTRESS'); // After wave 42
+    
+    // Calculate difficulty within cycle (resets after boss, but with offset)
+    const baselineGrowth = cycle * 0.15; // Each cycle is 15% harder baseline
+    const cycleProgress = (waveInCycle-1)/6; // 0.0 to 1.0 through the 6 waves
+    const difficultyMult = 1 + baselineGrowth + cycleProgress*0.5; // Grows 50% within cycle
+    
+    if(isBoss) {
+        enemies.push(createEnemy('BOSS',W/2-40,50));
+        
+        // VARIED BOSS ESCORTS with randomized formations!
+        const escortCount = Math.min(4+cycle*2,12);
+        
+        // Mix of alien types (not just one type!)
+        const escortPool = ['SCOUT','ZAP','TANK','SPLITTER','BOMBER','ELITE','SWARM_LEADER','MEDIC','PHANTOM','WARPER','FORTRESS'];
+        const availableTypes = escortPool.slice(0, Math.min(2+cycle, escortPool.length));
+        
+        // Random formation pattern
+        const formationStyle = Math.floor(Math.random()*4);
+        
+        if(formationStyle===0) { // V-FORMATION
+            for(let i=0;i<escortCount;i++) {
+                const side = i%2===0?-1:1;
+                const row = Math.floor(i/2);
+                const escortType = availableTypes[Math.floor(Math.random()*availableTypes.length)];
+                const alien = createEnemy(escortType, W/2 + side*(40+row*50), 120+row*45);
+                if(escortType==='SWARM_LEADER') {
+                    alien.swarmId=performance.now()+i;
+                    enemies.push(alien);
+                    for(let s=0;s<4;s++) {
+                        const ang=(s/4)*Math.PI*2;
+                        const m=createEnemy('SWARM',alien.x+Math.cos(ang)*25,alien.y+Math.sin(ang)*25);
+                        m.swarmId=alien.swarmId;
+                        m.leaderRef=alien;
+                        m.orbitAngle=ang;
+                        m.orbitPhase=s;
+                        enemies.push(m);
+                    }
+                } else {
+                    enemies.push(alien);
+                }
+            }
+        } else if(formationStyle===1) { // CIRCLE FORMATION
+            const radius = 120;
+            for(let i=0;i<escortCount;i++) {
+                const angle = (i/escortCount)*Math.PI*2;
+                const escortType = availableTypes[Math.floor(Math.random()*availableTypes.length)];
+                enemies.push(createEnemy(escortType, W/2+Math.cos(angle)*radius, 150+Math.sin(angle)*radius*0.5));
+            }
+        } else if(formationStyle===2) { // WALLS (left/right)
+            for(let i=0;i<escortCount;i++) {
+                const side = i<escortCount/2 ? 60 : W-100;
+                const yPos = 120 + (i%(escortCount/2))*50;
+                const escortType = availableTypes[Math.floor(Math.random()*availableTypes.length)];
+                enemies.push(createEnemy(escortType, side, yPos));
+            }
+        } else { // RANDOM SCATTERED
+            for(let i=0;i<escortCount;i++) {
+                const escortType = availableTypes[Math.floor(Math.random()*availableTypes.length)];
+                const xPos = 80 + Math.random()*(W-200);
+                const yPos = 100 + Math.random()*150;
+                enemies.push(createEnemy(escortType, xPos, yPos));
+            }
+        }
+    } else {
+        // Dynamic alien count - MORE aliens, SLOWER sweep speed
+        const baseCount = 10 + cycle*4; // 10, 14, 18, 22, 26... (was 8+3)
+        const waveBonus = Math.floor(waveInCycle * 1.5); // 0-13 aliens (was 0-4)
+        const totalAliens = Math.min(baseCount + waveBonus, 54); // Max 54 (was 45)
+        
+        // Calculate rows and cols
+        const cols = 9;
+        const rows = Math.ceil(totalAliens / cols);
+        const groupW = cols*70;
+        const startX = (W-groupW)/2+35;
+        
+        // Weight system based on unlocked types
+        const weights = {};
+        unlockedTypes.forEach(type => {
+            if(type==='SCOUT') {
+                weights[type] = Math.max(30, 100 - cycle*15 - waveInCycle*3);
+            } else if(type==='SPLITTER') {
+                weights[type] = 60 + waveInCycle*2;
+            } else if(type==='ZAP') {
+                weights[type] = 40 + waveInCycle*3;
+            } else if(type==='TANK') {
+                weights[type] = 25 + waveInCycle*2;
+            } else if(type==='BOMBER') {
+                weights[type] = 15 + waveInCycle*2;
+            } else if(type==='ELITE') {
+                weights[type] = 8 + waveInCycle;
+            } else if(type==='SWARM') {
+                weights[type] = 50 + waveInCycle*3; // Common, spawns groups
+            } else if(type==='MEDIC') {
+                weights[type] = 8 + waveInCycle; // Rare support
+            } else if(type==='PHANTOM') {
+                weights[type] = 12 + waveInCycle; // Moderate
+            } else if(type==='CARRIER') {
+                weights[type] = 6 + waveInCycle; // Rare, powerful
+            } else if(type==='WARPER') {
+                weights[type] = 7 + waveInCycle; // Moderate threat
+            } else if(type==='FORTRESS') {
+                weights[type] = 4 + waveInCycle; // Very rare tank
+            }
+        });
+        
+        // Spawn aliens
+        let spawnedCount = 0;
+        for(let r=0;r<rows;r++) {
+            for(let c=0;c<cols;c++) {
+                if(spawnedCount>=totalAliens) break;
+                const type = pickWeighted(weights);
+                
+                // SWARM spawns in groups with LEADER in center!
+                if(type==='SWARM' && spawnedCount+6<=totalAliens) {
+                    const swarmCount = 5+Math.floor(Math.random()*4); // 5-8 small ones
+                    const baseX = startX+c*70;
+                    const baseY = 40+r*55;
+                    
+                    // Create LEADER in center
+                    const leader = createEnemy('SWARM_LEADER', baseX, baseY);
+                    leader.swarmId = performance.now(); // Unique ID for this swarm
+                    enemies.push(leader);
+                    spawnedCount++;
+                    
+                    // Create small swarm members around leader with UNIQUE positions
+                    for(let s=0;s<swarmCount;s++) {
+                        const angle = (s/swarmCount)*Math.PI*2;
+                        const offsetX = Math.cos(angle)*30;
+                        const offsetY = Math.sin(angle)*30;
+                        const member = createEnemy('SWARM', baseX+offsetX, baseY+offsetY);
+                        member.swarmId = leader.swarmId; // Link to leader
+                        member.leaderRef = leader; // Direct reference
+                        member.orbitAngle = angle; // Each has different starting angle!
+                        member.orbitPhase = s; // Unique phase offset
+                        enemies.push(member);
+                        spawnedCount++;
+                    }
+                } else {
+                    enemies.push(createEnemy(type, startX+c*70, 40+r*55));
+                    spawnedCount++;
+                }
+            }
+            if(spawnedCount>=totalAliens) break;
+        }
+    }
+    
+    document.getElementById('w').textContent=wave;
+    showWave();
+}
+
+function pickWeighted(weights) {
+    const arr=[];
+    Object.keys(weights).forEach(k=>{
+        for(let i=0;i<weights[k];i++)arr.push(k);
+    });
+    return arr[Math.floor(Math.random()*arr.length)];
+}
+
+function createEnemy(type,x,y) {
+    const t=TYPES[type];
+    const cycle = Math.floor((wave-1)/10);
+    const waveInCycle = ((wave-1)%10)+1;
+    const fireRateMult = 1 + cycle*0.15 + (waveInCycle-1)*0.02;
+    
+    const enemy = {
+        type,x,y,w:t.sz,h:t.sz,hp:t.hp,maxHp:t.hp,col:t.col,pts:t.pts,dmg:t.dmg,
+        fire:t.fire*fireRateMult,split:t.split||false
+    };
+    
+    // Add special properties
+    if(t.healer) enemy.healer=true;
+    if(t.teleporter) { enemy.teleporter=true; enemy.teleportTimer=3+Math.random()*2; }
+    if(t.producer) { enemy.producer=true; enemy.undamagedTime=0; enemy.productionCooldown=0; }
+    if(t.gravity) enemy.gravity=true;
+    if(t.armored) enemy.armored=true;
+    if(t.leader) enemy.leader=true; // SWARM_LEADER
+    
+    return enemy;
+}
+
+function showWave() {
+    const wt=document.getElementById('wt');
+    const isBoss = wave%7===0; // Calculate here too!
+    wt.textContent=isBoss?'⚠ BOSS WAVE ⚠':`WAVE ${wave}`;
+    wt.style.display='block';
+    wt.style.animation='none';
+    setTimeout(()=>wt.style.animation='w 2s',10);
+    setTimeout(()=>wt.style.display='none',2000);
+}
+
+function shake(i){shakeInt=i;}
+
+function parts(x,y,col,n=15) {
+    for(let i=0;i<n;i++) {
+        const ang=Math.PI*2*i/n+(Math.random()-0.5)*0.5;
+        const spd=100+Math.random()*200;
+        particles.push({x,y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,life:1,sz:2+Math.random()*3,col});
+    }
+}
+
+function update(dt) {
+    if(gameOver)return;
+    
+    stars.forEach(s=>{s.y+=s.spd*dt;if(s.y>H){s.y=0;s.x=Math.random()*W;}});
+    
+    if(rapidFire){rapidTimer-=dt;if(rapidTimer<=0){rapidFire=false;tone(150,0.2);}}
+    if(projectileBoost){boostTimer-=dt;if(boostTimer<=0){projectileBoost=false;tone(200,0.2);}}
+    
+    // Player
+    if(keys['ArrowLeft']||keys['a'])player.x=Math.max(0,player.x-player.spd*dt);
+    if(keys['ArrowRight']||keys['d'])player.x=Math.min(W-player.w,player.x+player.spd*dt);
+    
+    // Bullets - FIXED: prevent continuous collision with same enemy
+    bullets=bullets.filter(b=>{
+        b.y-=700*dt;
+        if(b.y<0)return false;
+        
+        // WARPER GRAVITY FIELD - MUCH STRONGER pull!
+        enemies.forEach(e=>{
+            if(e.type==='WARPER' && e.hp>0) {
+                const dx=(e.x+e.w/2)-b.x;
+                const dy=(e.y+e.h/2)-b.y;
+                const dist=Math.sqrt(dx*dx+dy*dy);
+                if(dist<200 && dist>5) { // 200px gravity field
+                    // MUCH STRONGER pull strength
+                    const pullStrength=(200-dist)/200; // 0.0 to 1.0
+                    const pullForce=pullStrength*800; // INCREASED from 300 to 800!
+                    b.x+=dx/dist*pullForce*dt;
+                    b.y+=dy/dist*pullForce*dt;
+                }
+            }
+        });
+        
+        if(!b.hitEnemies) b.hitEnemies=[]; // Track which enemies already hit
+        
+        for(let i=enemies.length-1;i>=0;i--) {
+            const e=enemies[i];
+            // Skip if already hit this enemy
+            if(b.hitEnemies.includes(i)) continue;
+            
+            if(b.x>e.x-8&&b.x<e.x+e.w+8&&b.y>e.y-8&&b.y<e.y+e.h+8) {
+                b.hitEnemies.push(i); // Mark as hit
+                
+                // Calculate damage
+                let damage = b.boosted?2:1;
+                // FORTRESS has 50% armor (only normal bullets)
+                if(e.armored && !b.boosted) damage = Math.ceil(damage * 0.5);
+                e.hp-=damage;
+                
+                // WARPER ENERGY ABSORPTION!
+                if(e.gravity && !e.charging) {
+                    if(!e.energyCharge) e.energyCharge=0;
+                    e.energyCharge+=damage; // Absorb energy from hits!
+                    // Start charging after ANY hit!
+                    e.charging=true;
+                    e.chargeTime=0;
+                    e.chargeMax=5; // 5 second charge
+                }
+                
+                // CARRIER production damage tracking
+                if(e.producer && e.mode==='production') {
+                    if(!e.productionHits) e.productionHits=0;
+                    e.productionHits++;
+                }
+                
+                // Reset CARRIER undamagedTime
+                if(e.producer) e.undamagedTime=0;
+                // Track FORTRESS hit time
+                if(e.armored) e.lastHitTime=performance.now();
+                
+                parts(b.x,b.y,e.col,12);
+                tone(800,0.06);
+                
+                if(e.hp<=0) {
+                    // WARPER explodes if it WAS ALREADY charging before this hit!
+                    if(e.charging && e.chargeTime>0.1) { // Must have been charging for >0.1s
+                        // Damage nearby enemies!
+                        enemies.forEach(other=>{
+                            if(other!==e && other.hp>0) {
+                                const dist=Math.sqrt((other.x-e.x)**2+(other.y-e.y)**2);
+                                if(dist<80) { // Very close enemies take 1 damage
+                                    other.hp-=1;
+                                    parts(other.x+other.w/2,other.y+other.h/2,'#00BFFF',10);
+                                }
+                            }
+                        });
+                        // Massive explosion
+                        for(let i=0;i<60;i++) {
+                            const ang=Math.random()*Math.PI*2;
+                            particles.push({
+                                x:e.x+e.w/2,y:e.y+e.h/2,
+                                vx:Math.cos(ang)*300,vy:Math.sin(ang)*300,
+                                life:1.5,sz:5,col:'#00BFFF'
+                            });
+                        }
+                        tone(200,0.6,'sawtooth',0.15);
+                        shake(25);
+                    }
+                    
+                    score+=e.pts;
+                    document.getElementById('s').textContent=score;
+                    if(score>high){high=score;localStorage.setItem('inv-high',high);document.getElementById('h').textContent=high;}
+                    tone(280,0.2,'sawtooth');
+                    parts(e.x+e.w/2,e.y+e.h/2,e.col,30);
+                    shake(e.type==='BOSS'?30:8);
+                    if(e.type==='BOSS')tone(100,0.5,'sawtooth',0.3);
+                    
+                    // SWARM_LEADER death: disperse all members!
+                    if(e.leader && e.swarmId) {
+                        enemies.forEach(member => {
+                            if(member.swarmId === e.swarmId && member!==e) {
+                                member.dispersed = true;
+                                // Find nearest alien to anchor to
+                                let nearestAlien = null;
+                                let nearestDist = 999999;
+                                enemies.forEach(a => {
+                                    if(a!==member && a!==e && !a.dispersed && a.type!=='SWARM') {
+                                        const dist = Math.sqrt((a.x-member.x)**2 + (a.y-member.y)**2);
+                                        if(dist<nearestDist) {
+                                            nearestDist = dist;
+                                            nearestAlien = a;
+                                        }
+                                    }
+                                });
+                                // Disperse towards nearest alien (horizontally biased)
+                                if(nearestAlien) {
+                                    const dx = nearestAlien.x - member.x;
+                                    const dy = nearestAlien.y - member.y;
+                                    member.disperseAngle = Math.atan2(dy*0.3, dx); // 70% horizontal, 30% vertical
+                                } else {
+                                    // No aliens nearby - spread horizontally only
+                                    member.disperseAngle = (Math.random()-0.5) > 0 ? 0 : Math.PI;
+                                }
+                                member.disperseSpeed = 150+Math.random()*100;
+                                member.disperseTimer = 1.5; // Disperse for 1.5 seconds then stop
+                            }
+                        });
+                        parts(e.x+e.w/2,e.y+e.h/2,'#FFA500',50);
+                        shake(12);
+                    }
+                    
+                    if(e.split&&Math.random()<0.5) {
+                        // Split into 2 RANDOM aliens!
+                        const splitTypes=['SCOUT','ZAP','SPLITTER'];
+                        for(let i=0;i<2;i++) {
+                            const splitType=splitTypes[Math.floor(Math.random()*splitTypes.length)];
+                            const xPos=e.x+(i===0?-25:25);
+                            const mini=createEnemy(splitType,xPos,e.y);
+                            if(splitType==='SPLITTER') mini.split=false; // Can't re-split!
+                            enemies.push(mini);
+                        }
+                        parts(e.x+e.w/2,e.y+e.h/2,'#ffff00',20);
+                        tone(600,0.15,'triangle');
+                    }
+                    
+                    if(Math.random()<0.03) {
+                        const typeWeights={rapid:20,shield:25,nuke:2,heal:20};
+                        const typeArr=[];
+                        Object.keys(typeWeights).forEach(t=>{
+                            for(let i=0;i<typeWeights[t];i++)typeArr.push(t);
+                        });
+                        const type=typeArr[Math.floor(Math.random()*typeArr.length)];
+                        powerups.push({type:type,x:e.x,y:e.y,spd:180});
+                    }
+                    
+                    enemies.splice(i,1);
+                }
+                
+                // Boosted bullets can hit 2 enemies total
+                if(b.boosted && b.hitEnemies.length>=2) return false;
+                // Normal bullets stop after 1 hit
+                if(!b.boosted) return false;
+            }
+        }
+        return true;
+    });
+    
+    // Enemy bullets
+    eBullets=eBullets.filter(b=>{
+        // Charging projectiles stay attached to alien
+        if(b.type==='eliteCharging') {
+            // Remove if marked for removal OR parent died OR charge expired
+            if(b.shouldRemove) return false;
+            if(!b.parentAlien || b.parentAlien.hp<=0) return false;
+            
+            b.chargeProgress+=dt;
+            if(b.chargeProgress>=b.maxCharge) return false; // Expired
+            
+            const alienCX=b.parentAlien.x+b.parentAlien.w/2;
+            const alienCY=b.parentAlien.y+b.parentAlien.h;
+            b.x=alienCX+b.attachX;
+            b.y=alienCY;
+            
+            // Charge particles
+            if(Math.random()<0.25) {
+                const ang=Math.random()*Math.PI*2;
+                particles.push({
+                    x:b.x+Math.random()*8-4,y:b.y+Math.random()*8-4,
+                    vx:Math.cos(ang)*40,vy:Math.sin(ang)*40-60,
+                    life:0.5,sz:2,col:'#ff8800'
+                });
+            }
+            
+            // LOW frequency charge sound
+            const chargePct=b.chargeProgress/b.maxCharge;
+            if(Math.random()<0.08) {
+                tone(200+chargePct*150,0.08,'sine',0.04);
+            }
+            
+            return true;
+        }
+        
+        // WARPER charging stays at warper position
+        if(b.type==='warperCharging') {
+            if(!b.attachedAlien || b.attachedAlien.hp<=0) return false;
+            b.chargeProgress+=dt;
+            if(b.chargeProgress>=b.maxCharge) return false;
+            b.x=b.attachedAlien.x+b.attachedAlien.w/2;
+            b.y=b.attachedAlien.y+b.attachedAlien.h/2;
+            return true;
+        }
+        
+        // Normal bullet movement
+        if(b.vx!==undefined&&b.vy!==undefined) {
+            b.x+=b.vx*dt;
+            b.y+=b.vy*dt;
+        } else {
+            b.y+=(b.spd||350)*dt;
+        }
+        
+        // ELITE homing with ACTIVATION RADIUS - MAINTAIN SPEED
+        if(b.homing&&player&&b.type==='elite') {
+            const dx=(player.x+player.w/2)-b.x;
+            const dy=(player.y+player.h/2)-b.y;
+            const dist=Math.sqrt(dx*dx+dy*dy);
+            const activationRadius=b.homingRadius||250;
+            
+            // Calculate current speed
+            const currentSpeed=Math.sqrt(b.vx*b.vx+b.vy*b.vy);
+            
+            // Only home if within activation radius!
+            if(dist<activationRadius) {
+                const targetAngle=Math.atan2(dx,dy);
+                const currentAngle=b.angle||0;
+                const angleDiff=targetAngle-currentAngle;
+                const maxTurn=0.4;
+                
+                // Normalize angle
+                let normalizedDiff=angleDiff;
+                while(normalizedDiff>Math.PI)normalizedDiff-=Math.PI*2;
+                while(normalizedDiff<-Math.PI)normalizedDiff+=Math.PI*2;
+                
+                // Turn towards player
+                const turnAmount=Math.max(-maxTurn*dt*4,Math.min(maxTurn*dt*4,normalizedDiff));
+                b.angle=currentAngle+turnAmount;
+                
+                // Apply velocity at SAME SPEED (600!)
+                b.vx=Math.sin(b.angle)*600;
+                b.vy=Math.cos(b.angle)*600;
+            }
+        }
+        
+        if(b.y>H||b.x<-50||b.x>W+50)return false;
+        
+        if(b.x>player.x&&b.x<player.x+player.w&&b.y>player.y&&b.y<player.y+player.h) {
+            player.hp-=b.dmg||1;
+            document.getElementById('hp').style.width=(player.hp/player.maxHp*100)+'%';
+            parts(b.x,b.y,'#ff0000',20);
+            shake(15);
+            tone(100,0.4,'triangle',0.25);
+            if(player.hp<=0)endGame();
+            return false;
+        }
+        
+        for(let s of shields) {
+            const sx=Math.floor(b.x-s.x);
+            const sy=Math.floor(b.y-s.y);
+            if(sx>=0&&sx<s.w&&sy>=0&&sy<s.h&&s.pix[sy]&&s.pix[sy][sx]) {
+                const rad=b.bombRadius||4;
+                for(let dy=-rad;dy<=rad;dy++) {
+                    for(let dx=-rad;dx<=rad;dx++) {
+                        const px=sx+dx, py=sy+dy;
+                        if(px>=0&&px<s.w&&py>=0&&py<s.h&&s.pix[py]&&Math.sqrt(dx*dx+dy*dy)<=rad) s.pix[py][px]=0;
+                    }
+                }
+                parts(b.x,b.y,'#00ff00',12);
+                tone(400,0.1);
+                return false;
+            }
+        }
+        return true;
+    });
+    
+    // Typewriter movement - smooth progression within cycles
+    moveTimer+=dt*1000;
+    const cycle = Math.floor((wave-1)/10);
+    const waveInCycle = ((wave-1)%10)+1;
+    const baseSpeed = 2500 - cycle*150; // SLOWER progression (was 2200-200)
+    const cycleSpeed = (waveInCycle-1)*50; // SLOWER within cycle (was 80)
+    const moveInt=Math.max(1000,baseSpeed-cycleSpeed); // Min 1000ms (was 800)
+    
+    if(moveTimer>=moveInt) {
+        moveTimer=0;
+        let hitEdge=false;
+        
+        // Check edges BEFORE moving
+        enemies.forEach(e=>{
+            if((moveDir>0 && e.x+e.w>=W-15) || (moveDir<0 && e.x<=15)) {
+                hitEdge=true;
+            }
+        });
+        
+        if(hitEdge) {
+            // Hit edge: drop down and reverse
+            moveDir*=-1;
+            enemies.forEach(e=>e.y+=dropDist);
+            dropDist=Math.min(35,dropDist+2);
+        } else {
+            // No edge: move horizontally
+            enemies.forEach(e=>{
+                e.x+=65*moveDir;
+            });
+        }
+    }
+    
+    // Individual patterns
+    enemies.forEach(e=>{
+        if(!e.angle)e.angle=Math.random()*Math.PI*2;
+        if(!e.patternTimer)e.patternTimer=0;
+        if(!e.dir)e.dir=Math.random()>0.5?1:-1;
+        e.angle+=dt*3;
+        e.patternTimer+=dt;
+        
+        // 👻 PHANTOM TELEPORTATION - Takes MAX 2 closest allies + EPIC VFX!
+        if(e.teleporter && !e.invisible) {
+            e.teleportTimer-=dt;
+            if(e.teleportTimer<=0) {
+                // Teleport!
+                e.invisible=true;
+                
+                // Find nearby allies (within 80px) and sort by distance
+                const candidates=[];
+                enemies.forEach(a=>{
+                    if(a!==e && a.hp>0) {
+                        const dist=Math.sqrt((a.x-e.x)**2+(a.y-e.y)**2);
+                        if(dist<80) {
+                            candidates.push({alien:a,dist:dist});
+                        }
+                    }
+                });
+                
+                candidates.sort((a,b)=>a.dist-b.dist);
+                const nearbyAllies=candidates.slice(0,2).map(c=>c.alien);
+                
+                nearbyAllies.forEach(a=>{
+                    a.teleporting=true;
+                    a.teleportWith=e;
+                    // Purple smoke for allies
+                    for(let i=0;i<25;i++) {
+                        const ang=Math.random()*Math.PI*2;
+                        const spd=80+Math.random()*120;
+                        particles.push({
+                            x:a.x+a.w/2,y:a.y+a.h/2,
+                            vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,
+                            life:0.8+Math.random()*0.4,sz:3+Math.random()*2,col:'#9D00FF'
+                        });
+                    }
+                });
+                
+                // MASSIVE glowing purple smoke for phantom!
+                for(let i=0;i<60;i++) {
+                    const ang=Math.random()*Math.PI*2;
+                    const spd=100+Math.random()*150;
+                    particles.push({
+                        x:e.x+e.w/2,y:e.y+e.h/2,
+                        vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,
+                        life:1.0+Math.random()*0.5,sz:4+Math.random()*3,col:'#9D00FF'
+                    });
+                }
+                // Bright core flash
+                for(let i=0;i<20;i++) {
+                    const ang=Math.random()*Math.PI*2;
+                    particles.push({
+                        x:e.x+e.w/2,y:e.y+e.h/2,
+                        vx:Math.cos(ang)*200,vy:Math.sin(ang)*200,
+                        life:0.6,sz:2,col:'#ffffff'
+                    });
+                }
+                tone(1200,0.2,'sine',0.08);
+                shake(8);
+                
+                setTimeout(()=>{
+                    if(e.hp>0) {
+                        const newX=50+Math.random()*(W-100-e.w);
+                        const newY=80+Math.random()*200;
+                        const offsetX=newX-e.x;
+                        const offsetY=newY-e.y;
+                        
+                        e.x=newX;
+                        e.y=newY;
+                        e.invisible=false;
+                        
+                        // ARRIVAL smoke!
+                        for(let i=0;i<60;i++) {
+                            const ang=Math.random()*Math.PI*2;
+                            const spd=100+Math.random()*150;
+                            particles.push({
+                                x:e.x+e.w/2,y:e.y+e.h/2,
+                                vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,
+                                life:1.0+Math.random()*0.5,sz:4+Math.random()*3,col:'#9D00FF'
+                            });
+                        }
+                        for(let i=0;i<20;i++) {
+                            const ang=Math.random()*Math.PI*2;
+                            particles.push({
+                                x:e.x+e.w/2,y:e.y+e.h/2,
+                                vx:Math.cos(ang)*200,vy:Math.sin(ang)*200,
+                                life:0.6,sz:2,col:'#ffffff'
+                            });
+                        }
+                        tone(800,0.2,'sine',0.08);
+                        shake(8);
+                        
+                        // Teleport allies!
+                        nearbyAllies.forEach(a=>{
+                            if(a.hp>0 && a.teleporting) {
+                                a.x+=offsetX;
+                                a.y+=offsetY;
+                                if(a.x<30)a.x=30;
+                                if(a.x+a.w>W-30)a.x=W-30-a.w;
+                                if(a.y<80)a.y=80;
+                                if(a.y>400)a.y=400;
+                                // Arrival smoke for allies
+                                for(let i=0;i<25;i++) {
+                                    const ang=Math.random()*Math.PI*2;
+                                    const spd=80+Math.random()*120;
+                                    particles.push({
+                                        x:a.x+a.w/2,y:a.y+a.h/2,
+                                        vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,
+                                        life:0.8+Math.random()*0.4,sz:3+Math.random()*2,col:'#9D00FF'
+                                    });
+                                }
+                                a.teleporting=false;
+                                a.teleportWith=null;
+                            }
+                        });
+                        
+                        e.teleportTimer=3+Math.random()*2;
+                    }
+                },300);
+            }
+        }
+        
+        // 💚 MEDIC HEALING PULSE - MASSIVE VISIBLE EFFECT!
+        if(e.healer) {
+            if(!e.healTimer) e.healTimer=6;
+            e.healTimer-=dt;
+            
+            // Pulsing glow showing radius
+            if(!e.pulsePhase) e.pulsePhase=0;
+            e.pulsePhase+=dt*3;
+            
+            if(e.healTimer<=0) {
+                e.healTimer=6;
+                // Heal nearby aliens
+                let healed=0;
+                enemies.forEach(a=>{
+                    if(a!==e && a.hp<a.maxHp) {
+                        const dist=Math.sqrt((a.x-e.x)**2+(a.y-e.y)**2);
+                        if(dist<150) {
+                            a.hp=Math.min(a.maxHp,a.hp+1);
+                            healed++;
+                            parts(a.x+a.w/2,a.y+a.h/2,'#00FF88',10);
+                        }
+                    }
+                });
+                if(healed>0) {
+                    // MASSIVE healing pulse VFX!
+                    for(let i=0;i<40;i++) {
+                        const ang=Math.random()*Math.PI*2;
+                        particles.push({
+                            x:e.x+e.w/2,y:e.y+e.h/2,
+                            vx:Math.cos(ang)*180,vy:Math.sin(ang)*180,
+                            life:1.2,sz:4,col:'#00FF88'
+                        });
+                    }
+                    tone(600,0.3,'sine',0.06);
+                    shake(6);
+                }
+            }
+        }
+        
+        // 🏭 CARRIER PRODUCTION - NEW SYSTEM!
+        if(e.producer) {
+            if(!e.productionTimer) e.productionTimer=0;
+            if(!e.attackTimer) e.attackTimer=0;
+            
+            // Initialize pulse
+            if(!e.pulsePhase) e.pulsePhase=0;
+            if(!e.lastPulseSound) e.lastPulseSound=0;
+            
+            // Mode switching logic
+            if(!e.mode) e.mode='attack';
+            
+            if(e.mode==='attack') {
+                e.attackTimer+=dt;
+                // Switch to production after 12 seconds OR when damaged
+                if(e.attackTimer>=12 || e.hp<e.maxHp*0.8) {
+                    e.mode='production';
+                    e.productionTimer=0;
+                    e.productionHits=0; // Reset hit counter
+                    e.attackTimer=0;
+                }
+            } else if(e.mode==='production') {
+                e.productionTimer+=dt;
+                e.pulsePhase+=dt*3;
+                const pulse=Math.sin(e.pulsePhase);
+                
+                // Heartbeat sound
+                if(pulse>0.9 && performance.now()-e.lastPulseSound>500) {
+                    const flickerVol=(1-e.productionHits*0.2)*0.04;
+                    tone(400,0.15,'sine',flickerVol);
+                    setTimeout(()=>tone(380,0.12,'sine',flickerVol*0.75),100);
+                    e.lastPulseSound=performance.now();
+                }
+                
+                // After 6 seconds - PRODUCE!
+                if(e.productionTimer>=6) {
+                    const spawnTypes=['SCOUT','ZAP','TANK','SPLITTER','BOMBER','ELITE'];
+                    let spawnCount=3-e.productionHits; // 3, 2, 1, or 0 based on hits
+                    if(spawnCount<0) spawnCount=0;
+                    
+                    // Spawn aliens DISPERSED across ranks!
+                    if(enemies.length<50) {
+                        for(let i=0;i<spawnCount;i++) {
+                            const type=spawnTypes[Math.floor(Math.random()*spawnTypes.length)];
+                            const xOffset=(Math.random()-0.5)*120; // Spread horizontally
+                            const yOffset=-40-Math.random()*100; // Spread vertically in back ranks
+                            enemies.push(createEnemy(type,e.x+e.w/2+xOffset,e.y+yOffset));
+                        }
+                        if(spawnCount>0) {
+                            parts(e.x+e.w/2,e.y+e.h,'#8B00FF',30);
+                            tone(700,0.3,'square',0.08);
+                            shake(10);
+                        }
+                    }
+                    
+                    // BONUS: Gain 1 HP if not hit!
+                    if(e.productionHits===0 && e.hp<e.maxHp) {
+                        e.hp=Math.min(e.maxHp,e.hp+1);
+                        parts(e.x+e.w/2,e.y+e.h/2,'#00ff00',20);
+                        tone(600,0.2,'sine',0.06);
+                    }
+                    
+                    // Switch back to attack
+                    e.mode='attack';
+                    e.productionTimer=0;
+                    e.productionHits=0;
+                    e.attackTimer=0;
+                }
+            }
+        }
+        
+        // 🛡️ FORTRESS REGENERATION
+        if(e.armored) {
+            if(!e.regenTimer) e.regenTimer=10;
+            if(!e.lastHitTime) e.lastHitTime=0;
+            e.regenTimer-=dt;
+            if(e.regenTimer<=0 && performance.now()-e.lastHitTime>10000 && e.hp<e.maxHp) {
+                e.hp=Math.min(e.maxHp,e.hp+1);
+                parts(e.x+e.w/2,e.y+e.h/2,'#8B0000',12);
+                e.regenTimer=10;
+            }
+        }
+        
+        // ⚡ WARPER CHARGING ATTACK - Energy absorption!
+        if(e.gravity && e.charging) {
+            e.chargeTime+=dt;
+            const chargePct=e.chargeTime/e.chargeMax;
+            
+            // Growing sound waves
+            if(Math.random()<0.15*chargePct) {
+                tone(300+chargePct*800,0.1,'sine',0.05+chargePct*0.1);
+            }
+            
+            // Charging particles
+            if(Math.random()<0.5) {
+                const ang=Math.random()*Math.PI*2;
+                particles.push({
+                    x:e.x+e.w/2+Math.cos(ang)*60,
+                    y:e.y+e.h/2+Math.sin(ang)*60,
+                    vx:Math.cos(ang)*-100,vy:Math.sin(ang)*-100,
+                    life:0.6,sz:3,col:'#00BFFF'
+                });
+            }
+            
+            // FIRE when charged!
+            if(e.chargeTime>=e.chargeMax) {
+                const cx=e.x+e.w/2;
+                const cy=e.y+e.h/2;
+                const px=player.x+player.w/2;
+                const py=player.y+player.h/2;
+                // Predict player position slightly for better aim
+                const predictedPlayerX=px+(keys['ArrowLeft']?-100:keys['ArrowRight']?100:0);
+                const angle=Math.atan2(predictedPlayerX-cx,py-cy); // Fixed: py-cy not 300-cy!
+                // Add slight imperfection (±3 degrees)
+                const imperfection=(Math.random()-0.5)*0.05;
+                
+                // SUPERSONIC DEVASTATING PROJECTILE - 2X FASTER!
+                eBullets.push({
+                    x:cx,y:cy,dmg:6,spd:1700,
+                    vx:Math.sin(angle+imperfection)*1700,
+                    vy:Math.cos(angle+imperfection)*1700,
+                    bombRadius:50,type:'warperSuper',size:16,
+                    energyLevel:e.energyCharge||1
+                });
+                
+                // MASSIVE explosion particles
+                for(let i=0;i<50;i++) {
+                    const ang=Math.random()*Math.PI*2;
+                    particles.push({
+                        x:cx,y:cy,
+                        vx:Math.cos(ang)*250,vy:Math.sin(ang)*250,
+                        life:1.2,sz:4,col:'#00BFFF'
+                    });
+                }
+                
+                tone(1800,0.4,'square',0.2);
+                shake(20);
+                e.charging=false;
+                e.energyCharge=0;
+                e.chargeTime=0;
+            }
+        }
+        
+        // Movement patterns
+        if(e.type==='SCOUT') {
+        } else if(e.type==='ZAP') {
+            e.x+=Math.sin(e.angle*2.5)*200*dt;
+        } else if(e.type==='TANK') {
+            e.x+=Math.sin(e.angle)*40*dt;
+        } else if(e.type==='SPLITTER') {
+            e.x+=Math.sin(e.angle*1.5)*80*dt;
+        } else if(e.type==='BOMBER') {
+            if(e.patternTimer>1.5) {
+                e.patternTimer=0;
+                e.dir=Math.random()<0.5?1:-1;
+                if(Math.random()<0.3)e.dir=0;
+            }
+            e.x+=e.dir*100*dt;
+            if(e.dir===0)e.y-=50*dt;
+            
+            // Keep on screen!
+            if(e.x<20) {e.x=20; e.dir=1;}
+            if(e.x+e.w>W-20) {e.x=W-20-e.w; e.dir=-1;}
+            
+            // Stay at the back! Move up if too far forward
+            if(e.y>300) e.y-=80*dt;
+            
+            const nearby=enemies.find(a=>a!==e&&Math.abs(a.x-e.x)<100&&a.y<e.y&&a.y>e.y-80);
+            if(nearby) {
+                const dx=(nearby.x+nearby.w/2)-(e.x+e.w/2);
+                e.x+=Math.sign(dx)*80*dt;
+            }
+        } else if(e.type==='ELITE') {
+            // CHAOTIC erratic movement - but STAY AT BACK
+            e.x+=Math.cos(e.angle*3)*220*dt;
+            e.y+=Math.sin(e.angle*2.5)*90*dt;
+            // Random direction switches
+            if(Math.random()<dt*2) e.angle+=Math.random()*Math.PI*0.5;
+            
+            // KEEP IN BOUNDS!
+            if(e.x<30) {e.x=30; e.angle+=Math.PI*0.5;}
+            if(e.x+e.w>W-30) {e.x=W-30-e.w; e.angle-=Math.PI*0.5;}
+            
+            // Stay at the back! Don't go below y=350
+            if(e.y>350) e.y=350;
+        } else if(e.type==='BOSS') {
+            e.y=Math.max(80,Math.min(200,e.y+Math.sin(e.angle*0.3)*40*dt));
+        } else if(e.type==='SWARM') {
+            // Initialize orbit if needed
+            if(e.orbitAngle===undefined) e.orbitAngle=Math.random()*Math.PI*2;
+            if(e.orbitPhase===undefined) e.orbitPhase=Math.random()*10;
+            if(e.chaoticTimer===undefined) e.chaoticTimer=0;
+            
+            // CHAOTIC darting behavior!
+            e.chaoticTimer-=dt;
+            if(e.chaoticTimer<=0) {
+                e.chaoticTimer=0.2+Math.random()*0.3; // Change direction frequently
+                e.dartAngle=Math.random()*Math.PI*2; // Random dart direction
+            }
+            
+            // Fast synchronized wave movement OR dispersed panic OR swarming
+            if(e.dispersed) {
+                // DISPERSE! Scatter towards other aliens
+                if(e.disperseTimer>0) {
+                    e.disperseTimer-=dt;
+                    e.x+=Math.cos(e.disperseAngle)*e.disperseSpeed*dt;
+                    e.y+=Math.sin(e.disperseAngle)*e.disperseSpeed*dt;
+                    // Keep in bounds!
+                    if(e.x<30) e.x=30;
+                    if(e.x+e.w>W-30) e.x=W-30-e.w;
+                    if(e.y<80) e.y=80;
+                    if(e.y>400) e.y=400;
+                } else {
+                    // Disperse finished - find alien to swarm around!
+                    e.dispersed = false;
+                    // Find nearest non-swarm alien
+                    let nearestAlien = null;
+                    let nearestDist = 999999;
+                    enemies.forEach(a => {
+                        if(a!==e && a.type!=='SWARM' && a.type!=='SWARM_LEADER') {
+                            const dist = Math.sqrt((a.x-e.x)**2 + (a.y-e.y)**2);
+                            if(dist<nearestDist) {
+                                nearestDist = dist;
+                                nearestAlien = a;
+                            }
+                        }
+                    });
+                    if(nearestAlien) {
+                        e.swarmTarget = nearestAlien;
+                        e.orbitAngle = Math.random()*Math.PI*2;
+                    }
+                }
+            } else if(e.leaderRef && e.leaderRef.hp>0) {
+                // CHAOTIC SWARMING around leader!
+                const leaderX = e.leaderRef.x + e.leaderRef.w/2;
+                const leaderY = e.leaderRef.y + e.leaderRef.h/2;
+                
+                // Orbit + erratic darting + zigzag
+                e.orbitAngle += dt * (3 + Math.sin(e.orbitPhase)*2); // Variable speed!
+                const orbitDist = 25 + Math.sin(performance.now()/200+e.orbitPhase)*15; // Pulsing distance
+                
+                // Base orbit position
+                let targetX = leaderX + Math.cos(e.orbitAngle)*orbitDist;
+                let targetY = leaderY + Math.sin(e.orbitAngle)*orbitDist;
+                
+                // Add chaotic darting
+                targetX += Math.cos(e.dartAngle+e.angle*5)*20;
+                targetY += Math.sin(e.dartAngle+e.angle*5)*20;
+                
+                // Zigzag motion
+                targetX += Math.sin(performance.now()/100+e.orbitPhase)*12;
+                targetY += Math.cos(performance.now()/150+e.orbitPhase)*12;
+                
+                e.x+=(targetX-e.x)*dt*6; // Fast response
+                e.y+=(targetY-e.y)*dt*6;
+            } else if(e.swarmTarget && e.swarmTarget.hp>0) {
+                // CHAOTIC SWARMING around new target alien!
+                const targetX = e.swarmTarget.x + e.swarmTarget.w/2;
+                const targetY = e.swarmTarget.y + e.swarmTarget.h/2;
+                
+                e.orbitAngle += dt * (3.5 + Math.sin(e.orbitPhase)*2);
+                const orbitDist = 30 + Math.sin(performance.now()/200+e.orbitPhase)*18;
+                
+                let newX = targetX + Math.cos(e.orbitAngle)*orbitDist;
+                let newY = targetY + Math.sin(e.orbitAngle)*orbitDist;
+                
+                // Chaotic darting
+                newX += Math.cos(e.dartAngle+e.angle*6)*25;
+                newY += Math.sin(e.dartAngle+e.angle*6)*25;
+                
+                // Zigzag
+                newX += Math.sin(performance.now()/100+e.orbitPhase)*15;
+                newY += Math.cos(performance.now()/150+e.orbitPhase)*15;
+                
+                e.x+=(newX-e.x)*dt*6;
+                e.y+=(newY-e.y)*dt*6;
+            } else if(e.swarmTarget && e.swarmTarget.hp<=0) {
+                // Target died - find new one!
+                e.swarmTarget = null;
+                let nearestAlien = null;
+                let nearestDist = 999999;
+                enemies.forEach(a => {
+                    if(a!==e && a.type!=='SWARM' && a.type!=='SWARM_LEADER' && a.hp>0) {
+                        const dist = Math.sqrt((a.x-e.x)**2 + (a.y-e.y)**2);
+                        if(dist<nearestDist) {
+                            nearestDist = dist;
+                            nearestAlien = a;
+                        }
+                    }
+                });
+                if(nearestAlien) e.swarmTarget = nearestAlien;
+            } else {
+                // Leader dead and no target - initiate disperse!
+                if(!e.dispersed && !e.disperseTimer) {
+                    e.dispersed = true;
+                    // Find nearest alien
+                    let nearestAlien = null;
+                    let nearestDist = 999999;
+                    enemies.forEach(a => {
+                        if(a!==e && a.type!=='SWARM' && a.type!=='SWARM_LEADER') {
+                            const dist = Math.sqrt((a.x-e.x)**2 + (a.y-e.y)**2);
+                            if(dist<nearestDist) {
+                                nearestDist = dist;
+                                nearestAlien = a;
+                            }
+                        }
+                    });
+                    if(nearestAlien) {
+                        const dx = nearestAlien.x - e.x;
+                        const dy = nearestAlien.y - e.y;
+                        e.disperseAngle = Math.atan2(dy*0.3, dx);
+                    } else {
+                        e.disperseAngle = (Math.random()-0.5) > 0 ? 0 : Math.PI;
+                    }
+                    e.disperseSpeed = 150+Math.random()*100;
+                    e.disperseTimer = 1.5;
+                }
+            }
+        } else if(e.type==='SWARM_LEADER') {
+            // Leader moves with synchronized wave
+            e.x+=Math.sin(e.angle*4)*150*dt;
+            e.y+=Math.cos(e.angle*1.5)*30*dt;
+        } else if(e.type==='MEDIC') {
+            // Circular evasive, stays at back
+            e.x+=Math.cos(e.angle*1.8)*120*dt;
+            e.y=Math.max(80,Math.min(300,e.y+Math.sin(e.angle*0.8)*50*dt));
+        } else if(e.type==='PHANTOM') {
+            // Erratic darting when visible
+            if(!e.invisible) {
+                e.x+=Math.cos(e.angle*4)*180*dt;
+                e.y+=Math.sin(e.angle*3)*60*dt;
+            }
+        } else if(e.type==='CARRIER') {
+            // Strategic positioning - front/back based on mode
+            if(!e.mode) e.mode='attack'; // Default attack mode
+            if(e.mode==='attack' && e.y<280) e.y+=60*dt; // Move to front
+            if(e.mode==='production' && e.y>180) e.y-=60*dt; // Move to back
+            e.x+=Math.sin(e.angle*0.8)*50*dt;
+        } else if(e.type==='WARPER') {
+            // Slow centered movement
+            e.x+=Math.cos(e.angle)*80*dt;
+            e.y=Math.max(100,Math.min(250,e.y+Math.sin(e.angle*0.5)*40*dt));
+        } else if(e.type==='FORTRESS') {
+            // VERY slow drift, stays front
+            e.x+=Math.sin(e.angle*0.3)*30*dt;
+            if(e.y<250) e.y+=20*dt; // Move to front line
+        }
+        
+        if(e.y+e.h>=H-100)endGame();
+    });
+    
+    // Aliens shoot
+    enemies.forEach(e=>{
+        if(Math.random()<e.fire*dt*60) {
+            const cx=e.x+e.w/2, cy=e.y+e.h;
+            const px=player.x+player.w/2;
+            
+            if(e.type==='SCOUT') {
+                eBullets.push({x:cx,y:cy,dmg:1,spd:350,type:'normal'}); // FIXED: 1 DMG not 2!
+            } else if(e.type==='ZAP') {
+                // 3 projectiles each with RANDOM angle -7° to +7°
+                for(let i=0;i<3;i++) {
+                    const angleRad=(Math.random()*14-7)*Math.PI/180; // Random -7° to +7°
+                    setTimeout(()=>{
+                        if(!gameOver)eBullets.push({
+                            x:cx,y:cy,dmg:1,spd:500,type:'zap',size:3,
+                            vx:Math.sin(angleRad)*500,
+                            vy:Math.cos(angleRad)*500
+                        });
+                    },i*100);
+                }
+            } else if(e.type==='TANK') {
+                eBullets.push({x:cx,y:cy,dmg:3,spd:220,bombRadius:25,type:'tank',size:8}); // Increased radius
+            } else if(e.type==='SPLITTER') {
+                // Shoot 2 projectiles!
+                for(let j=0;j<2;j++) {
+                    const angleRad=(Math.random()*30-15)*Math.PI/180;
+                    setTimeout(()=>{
+                        if(!gameOver) eBullets.push({
+                            x:cx,y:cy,dmg:2,spd:480,type:'fast',size:5,
+                            vx:Math.sin(angleRad)*480,
+                            vy:Math.cos(angleRad)*480
+                        });
+                    },j*80);
+                }
+            } else if(e.type==='BOMBER') {
+                // FAST DEADLY bombs that DECIMATE shields!
+                eBullets.push({x:cx,y:cy,dmg:5,spd:450,bombRadius:35,type:'bomb',size:12,shake:18});
+                // Also shoot waves of small projectiles
+                if(Math.random()<0.5) {
+                    const count=5+Math.floor(Math.random()*6); // 5-10 projectiles
+                    for(let j=0;j<count;j++) {
+                        const spread=(j-count/2)*0.15;
+                        setTimeout(()=>{
+                            if(!gameOver) eBullets.push({
+                                x:cx,y:cy,dmg:1,spd:520,type:'bomberWave',size:4,
+                                vx:Math.sin(spread)*520,
+                                vy:Math.cos(spread)*520
+                            });
+                        },j*50);
+                    }
+                }
+            } else if(e.type==='ELITE') {
+                // CHARGED projectiles - stay attached during charge!
+                const leftX=cx-e.w*0.5;
+                const rightX=cx+e.w*0.5;
+                
+                const chargeTime=0.6;
+                const charging1={
+                    x:leftX,y:cy,attached:true,attachX:-e.w*0.5,
+                    chargeProgress:0,maxCharge:chargeTime,
+                    parentAlien:e,type:'eliteCharging',size:7,
+                    startTime:performance.now()
+                };
+                const charging2={
+                    x:rightX,y:cy,attached:true,attachX:e.w*0.5,
+                    chargeProgress:0,maxCharge:chargeTime,
+                    parentAlien:e,type:'eliteCharging',size:7,
+                    startTime:performance.now()
+                };
+                
+                eBullets.push(charging1);
+                eBullets.push(charging2);
+                
+                // Launch after charge completes
+                setTimeout(()=>{
+                    if(!gameOver && e.alive!==false) {
+                        // PROPERLY remove charging projectiles by marking them
+                        charging1.shouldRemove=true;
+                        charging2.shouldRemove=true;
+                        
+                        const currentCX=e.x+e.w/2, currentCY=e.y+e.h;
+                        const leftAngle=-0.5;
+                        const rightAngle=0.5;
+                        
+                        // Explosion particles
+                        for(let j=0;j<15;j++) {
+                            const ang=Math.random()*Math.PI*2;
+                            particles.push({
+                                x:currentCX-e.w*0.5,y:currentCY,
+                                vx:Math.cos(ang)*150,vy:Math.sin(ang)*150,
+                                life:0.6,sz:3,col:'#ff8800'
+                            });
+                            particles.push({
+                                x:currentCX+e.w*0.5,y:currentCY,
+                                vx:Math.cos(ang)*150,vy:Math.sin(ang)*150,
+                                life:0.6,sz:3,col:'#ff8800'
+                            });
+                        }
+                        
+                        // Launch projectiles
+                        eBullets.push({
+                            x:currentCX-e.w*0.5,y:currentCY,dmg:2,
+                            vx:Math.sin(leftAngle)*600,
+                            vy:Math.cos(leftAngle)*600,
+                            homing:true,homingRadius:250, // Activation radius!
+                            maxDeviation:0.4,homingStr:230,
+                            angle:leftAngle,
+                            type:'elite',size:8,glow:true
+                        });
+                        
+                        eBullets.push({
+                            x:currentCX+e.w*0.5,y:currentCY,dmg:2,
+                            vx:Math.sin(rightAngle)*600,
+                            vy:Math.cos(rightAngle)*600,
+                            homing:true,homingRadius:250,
+                            maxDeviation:0.4,homingStr:230,
+                            angle:rightAngle,
+                            type:'elite',size:8,glow:true
+                        });
+                        
+                        tone(1400,0.15,'sine',0.12);
+                        shake(8);
+                    }
+                },chargeTime*1000);
+            } else if(e.type==='BOSS') {
+                const pattern=Math.floor(Math.random()*6); // 6 different patterns now!
+                
+                if(pattern===0) { // 🌟 SPAWN ASSAULT - Spawn aliens dispersed + preview next type!
+                    if(enemies.length<40) {
+                        // Include all current types + PREVIEW (NO CARRIERS - too OP!)
+                        let spawnTypes=['SCOUT','ZAP','TANK','SPLITTER','BOMBER','ELITE',
+                                       'SWARM_LEADER','MEDIC','PHANTOM','WARPER','FORTRESS'];
+                        
+                        // Add PREVIEW alien (next unlock)
+                        const previewTypes=['ZAP','TANK','BOMBER','ELITE','WARPER','FORTRESS'];
+                        if(cycle<6) spawnTypes.push(previewTypes[cycle]); // Preview next!
+                        
+                        for(let i=0;i<3;i++) {
+                            const randomType=spawnTypes[Math.floor(Math.random()*spawnTypes.length)];
+                            const xOffset=(Math.random()-0.5)*180; // Spread horizontally
+                            const yOffset=-60-Math.random()*120; // Back ranks
+                            
+                            if(randomType==='SWARM_LEADER') {
+                                // Spawn with swarm members
+                                const leader=createEnemy('SWARM_LEADER',e.x+e.w/2+xOffset,e.y+yOffset);
+                                leader.swarmId=performance.now()+i;
+                                enemies.push(leader);
+                                for(let s=0;s<5;s++) {
+                                    const angle=(s/5)*Math.PI*2;
+                                    const member=createEnemy('SWARM',leader.x+Math.cos(angle)*30,leader.y+Math.sin(angle)*30);
+                                    member.swarmId=leader.swarmId;
+                                    member.leaderRef=leader;
+                                    member.orbitAngle=angle;
+                                    member.orbitPhase=s;
+                                    enemies.push(member);
+                                }
+                                // Spawn particles for whole swarm
+                                for(let j=0;j<30;j++) {
+                                    const ang=Math.random()*Math.PI*2;
+                                    particles.push({
+                                        x:leader.x+leader.w/2,
+                                        y:leader.y+leader.h/2,
+                                        vx:Math.cos(ang)*180,vy:Math.sin(ang)*180,
+                                        life:0.8,sz:3,col:'#FFA500'
+                                    });
+                                }
+                            } else {
+                                const spawnedAlien=createEnemy(randomType,e.x+e.w/2+xOffset,e.y+yOffset);
+                                enemies.push(spawnedAlien);
+                                // Spawn particles
+                                for(let j=0;j<20;j++) {
+                                    const ang=Math.random()*Math.PI*2;
+                                    particles.push({
+                                        x:spawnedAlien.x+spawnedAlien.w/2,
+                                        y:spawnedAlien.y+spawnedAlien.h/2,
+                                        vx:Math.cos(ang)*180,vy:Math.sin(ang)*180,
+                                        life:0.8,sz:3,col:spawnedAlien.col
+                                    });
+                                }
+                            }
+                        }
+                        tone(800,0.2,'square');
+                        tone(600,0.25,'square');
+                        shake(12);
+                    }
+                    
+                } else if(pattern===1) { // 💣 CARPET BOMBING - Wave of bombs!
+                    for(let i=-3;i<=3;i++) {
+                        setTimeout(()=>{
+                            if(!gameOver) {
+                                eBullets.push({
+                                    x:cx+i*25,y:cy,dmg:5,spd:180,
+                                    bombRadius:40,type:'bossBomb',size:14,shake:25
+                                });
+                                tone(300-i*20,0.1,'sawtooth',0.1);
+                            }
+                        },Math.abs(i)*80); // Cascade timing!
+                    }
+                    shake(15);
+                    
+                } else if(pattern===2) { // 🌪️ SPIRAL BARRAGE - Rotating spread!
+                    for(let wave=0;wave<3;wave++) {
+                        setTimeout(()=>{
+                            if(!gameOver) {
+                                const rotation=wave*0.3; // Rotate each wave
+                                for(let i=-5;i<=5;i++) {
+                                    const angle=i*0.22+rotation;
+                                    eBullets.push({
+                                        x:cx,y:cy,dmg:1,spd:580,type:'bossSpread',
+                                        vx:Math.sin(angle)*580,
+                                        vy:Math.cos(angle)*580,
+                                        size:5
+                                    });
+                                }
+                                tone(1200+wave*200,0.1,'sine',0.08);
+                            }
+                        },wave*200);
+                    }
+                    shake(10);
+                    
+                } else if(pattern===3) { // 🎯 SNIPER STRIKE - Aimed burst at player!
+                    const px=player.x+player.w/2;
+                    const angleToPlayer=Math.atan2(px-cx,150);
+                    
+                    // Fire 5 projectiles in quick succession
+                    for(let burst=0;burst<5;burst++) {
+                        setTimeout(()=>{
+                            if(!gameOver) {
+                                const spreadAngle=angleToPlayer+(burst-2)*0.08;
+                                eBullets.push({
+                                    x:cx,y:cy,dmg:3,spd:550,
+                                    vx:Math.sin(spreadAngle)*550,
+                                    vy:Math.cos(spreadAngle)*550,
+                                    bombRadius:7,type:'bossDirect',size:9
+                                });
+                                // Red warning particles
+                                for(let j=0;j<8;j++) {
+                                    const ang=Math.random()*Math.PI*2;
+                                    particles.push({
+                                        x:cx,y:cy,
+                                        vx:Math.cos(ang)*100,vy:Math.sin(ang)*100,
+                                        life:0.4,sz:2,col:'#ff0000'
+                                    });
+                                }
+                                tone(1400-burst*50,0.08,'square',0.1);
+                            }
+                        },burst*120); // Rapid fire!
+                    }
+                    shake(8);
+                    
+                } else if(pattern===4) { // ⚡ TELEPORT STRIKE - Boss teleports and unleashes spread!
+                    // Teleport to side
+                    const newX=Math.random()<0.5?50:W-e.w-50;
+                    const oldX=e.x;
+                    e.x=newX;
+                    
+                    // Purple teleport VFX
+                    for(let i=0;i<40;i++) {
+                        const ang=Math.random()*Math.PI*2;
+                        particles.push({
+                            x:oldX+e.w/2,y:e.y+e.h/2,
+                            vx:Math.cos(ang)*200,vy:Math.sin(ang)*200,
+                            life:0.8,sz:3,col:'#ffffff'
+                        });
+                        particles.push({
+                            x:e.x+e.w/2,y:e.y+e.h/2,
+                            vx:Math.cos(ang)*200,vy:Math.sin(ang)*200,
+                            life:0.8,sz:3,col:'#ffffff'
+                        });
+                    }
+                    tone(1500,0.2,'sine',0.12);
+                    shake(15);
+                    
+                    // Fire massive spread after teleport
+                    setTimeout(()=>{
+                        if(!gameOver) {
+                            for(let i=-4;i<=4;i++) {
+                                const angle=i*0.18;
+                                eBullets.push({
+                                    x:e.x+e.w/2,y:e.y+e.h/2,dmg:4,spd:500,
+                                    vx:Math.sin(angle)*500,
+                                    vy:Math.cos(angle)*500,
+                                    bombRadius:12,type:'bossTele',size:10
+                                });
+                            }
+                            tone(1000,0.3,'square',0.15);
+                            shake(20);
+                        }
+                    },300);
+                    
+                } else if(pattern===5) { // 🛡️ SHIELD BREAKER - Massive slow bomb targeting shields!
+                    const targetShield=shields[Math.floor(Math.random()*shields.length)];
+                    if(targetShield) {
+                        const targetX=targetShield.x+targetShield.w/2;
+                        const angle=Math.atan2(targetX-cx,300);
+                        
+                        // Charging warning
+                        for(let i=0;i<50;i++) {
+                            const ang=Math.random()*Math.PI*2;
+                            particles.push({
+                                x:cx,y:cy,
+                                vx:Math.cos(ang)*150,vy:Math.sin(ang)*150,
+                                life:1.2,sz:4,col:'#ff0000'
+                            });
+                        }
+                        tone(200,0.5,'sawtooth',0.1);
+                        
+                        setTimeout(()=>{
+                            if(!gameOver) {
+                                // HUGE SHIELD-SEEKING BOMB!
+                                eBullets.push({
+                                    x:cx,y:cy,dmg:10,spd:200,
+                                    vx:Math.sin(angle)*200,
+                                    vy:Math.cos(angle)*200,
+                                    bombRadius:80,type:'shieldBreaker',size:20,
+                                    targetX:targetX
+                                });
+                                tone(100,0.6,'sawtooth',0.2);
+                                shake(25);
+                            }
+                        },500);
+                    }
+                }
+            } else if(e.type==='SWARM') {
+                // Tiny fast orange projectile
+                eBullets.push({x:cx,y:cy,dmg:1,spd:450,type:'swarm',size:3});
+            } else if(e.type==='SWARM_LEADER') {
+                // Leader shoots 3 spread orange bullets
+                for(let i=-1;i<=1;i++) {
+                    const angle=i*0.2;
+                    eBullets.push({
+                        x:cx,y:cy,dmg:1,spd:480,
+                        vx:Math.sin(angle)*480,vy:Math.cos(angle)*480,
+                        type:'swarmLeader',size:5
+                    });
+                }
+            } else if(e.type==='MEDIC') {
+                // Medic doesn't attack!
+            } else if(e.type==='PHANTOM') {
+                // 3 weak homing projectiles
+                if(!e.invisible) {
+                    for(let i=-1;i<=1;i++) {
+                        const angle=i*0.2;
+                        eBullets.push({
+                            x:cx,y:cy,dmg:2,spd:500,
+                            homing:true,homingRadius:200,maxDeviation:0.3,
+                            vx:Math.sin(angle)*500,vy:Math.cos(angle)*500,
+                            angle:angle,type:'phantom',size:4
+                        });
+                    }
+                }
+            } else if(e.type==='CARRIER') {
+                // Attack mode: 5 rapid spread projectiles
+                if(e.mode==='attack') {
+                    for(let i=-2;i<=2;i++) {
+                        const angle=i*0.15;
+                        setTimeout(()=>{
+                            if(!gameOver) eBullets.push({
+                                x:cx,y:cy,dmg:4,spd:600,
+                                vx:Math.sin(angle)*600,vy:Math.cos(angle)*600,
+                                bombRadius:20,type:'carrier',size:7
+                            });
+                        },Math.abs(i)*80);
+                    }
+                }
+            } else if(e.type==='WARPER') {
+                // Charged beam attack
+                const chargeTime=1.0;
+                const charging={
+                    x:cx,y:cy,attachedAlien:e,chargeProgress:0,maxCharge:chargeTime,
+                    type:'warperCharging',size:8
+                };
+                eBullets.push(charging);
+                setTimeout(()=>{
+                    if(!gameOver && e.hp>0) {
+                        // Remove charge
+                        const idx=eBullets.indexOf(charging);
+                        if(idx>=0) eBullets.splice(idx,1);
+                        // Fire beam
+                        eBullets.push({
+                            x:cx,y:cy,dmg:3,spd:700,
+                            vx:0,vy:700,
+                            bombRadius:8,type:'warperBeam',size:10
+                        });
+                        tone(1600,0.2,'sine',0.1);
+                    }
+                },chargeTime*1000);
+            } else if(e.type==='FORTRESS') {
+                // 3 massive slow bombs in arc
+                for(let i=-1;i<=1;i++) {
+                    const angle=i*0.25;
+                    eBullets.push({
+                        x:cx,y:cy,dmg:5,spd:150,
+                        vx:Math.sin(angle)*150,vy:Math.cos(angle)*150,
+                        bombRadius:45,type:'fortressBomb',size:14
+                    });
+                }
+                shake(12);
+            }
+        }
+    });
+    
+    // Powerups
+    powerups=powerups.filter(p=>{
+        p.y+=p.spd*dt;
+        if(p.y>H)return false;
+        if(p.x>player.x&&p.x<player.x+player.w&&p.y>player.y&&p.y<player.y+player.h) {
+            if(p.type==='shield') {
+                shields.forEach(s=>{
+                    for(let y=0;y<s.h;y++)for(let x=0;x<s.w;x++){
+                        const dx=(x-s.w/2)/(s.w/2),dy=y/s.h;
+                        const curve=dy<0.5?Math.sqrt(1-dx*dx):1;
+                        if(dy<0.5?(1-dy/0.5)<curve:dy<0.85)s.pix[y][x]=1;
+                    }
+                });
+            } else if(p.type==='nuke') {
+                enemies.forEach(e=>{score+=e.pts;parts(e.x+e.w/2,e.y+e.h/2,e.col,20);});
+                document.getElementById('s').textContent=score;
+                enemies=[];
+                shake(35);
+                tone(140,0.7,'sawtooth');
+            } else if(p.type==='heal') {
+                player.hp=Math.min(player.maxHp,player.hp+1);
+                document.getElementById('hp').style.width=(player.hp/player.maxHp*100)+'%';
+            } else if(p.type==='rapid') {
+                projectileBoost=true;boostTimer=6;
+            }
+            const col=p.type==='heal'?'#ff0000':p.type==='rapid'?'#ffff00':p.type==='shield'?'#00ff00':'#ff00ff';
+            parts(p.x,p.y,col,15);
+            tone(950,0.25,'sine');
+            return false;
+        }
+        return true;
+    });
+    
+    particles=particles.filter(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=300*dt;p.life-=dt*2.5;return p.life>0;});
+    
+    if(shakeInt>0){shakeX=(Math.random()-0.5)*shakeInt;shakeY=(Math.random()-0.5)*shakeInt;shakeInt*=0.85;if(shakeInt<0.1){shakeInt=0;shakeX=shakeY=0;}}
+    
+    if(enemies.length===0) {wave++;tone(523,0.3,'sine');tone(659,0.3,'sine');spawnWave();}
+}
+
+function endGame() {
+    gameOver=true;
+    document.getElementById('fs').textContent=`FINAL SCORE: ${score}`;
+    document.getElementById('over').style.display='block';
+    tone(220,1,'sawtooth',0.15);
+}
+
+function restart() {
+    document.getElementById('over').style.display='none';
+    init();
+}
+
+function draw() {
+    ctx.save();
+    ctx.translate(shakeX,shakeY);
+    ctx.fillStyle='#000';
+    ctx.fillRect(0,0,W,H);
+    
+    stars.forEach(s=>{ctx.globalAlpha=s.br;ctx.fillStyle='#fff';ctx.fillRect(s.x,s.y,s.sz,s.sz);});
+    ctx.globalAlpha=1;
+    
+    ctx.fillStyle='#00ff00';
+    ctx.shadowBlur=10;
+    ctx.shadowColor='#00ff00';
+    shields.forEach(s=>{
+        ctx.beginPath();
+        for(let y=0;y<s.h;y++)for(let x=0;x<s.w;x++)if(s.pix[y][x])ctx.rect(s.x+x,s.y+y,1,1);
+        ctx.fill();
+    });
+    ctx.shadowBlur=0;
+    
+    const px=player.x+player.w/2, py=player.y;
+    ctx.fillStyle='#00ff00';
+    ctx.shadowBlur=25;
+    ctx.shadowColor='#00ff00';
+    ctx.beginPath();
+    ctx.moveTo(px,py);
+    ctx.lineTo(px-14,py+12);
+    ctx.lineTo(px-10,py+18);
+    ctx.lineTo(px-6,py+28);
+    ctx.lineTo(px+6,py+28);
+    ctx.lineTo(px+10,py+18);
+    ctx.lineTo(px+14,py+12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle='#00ffff';
+    ctx.beginPath();
+    ctx.moveTo(px-14,py+12);
+    ctx.lineTo(px-20,py+14);
+    ctx.lineTo(px-16,py+18);
+    ctx.lineTo(px-10,py+18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(px+14,py+12);
+    ctx.lineTo(px+20,py+14);
+    ctx.lineTo(px+16,py+18);
+    ctx.lineTo(px+10,py+18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle='#ffffff';
+    ctx.beginPath();
+    ctx.arc(px,py+8,3,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle='#00ffff';
+    ctx.shadowBlur=20;
+    ctx.shadowColor='#00ffff';
+    for(let i=-1;i<=1;i+=2) {
+        ctx.beginPath();
+        ctx.ellipse(px+i*5,py+28,3,5,0,0,Math.PI*2);
+        ctx.fill();
+    }
+    ctx.shadowBlur=0;
+    
+    bullets.forEach(b=>{
+        ctx.fillStyle=b.boosted?'#ff00ff':(rapidFire?'#ffff00':'#00ffff');
+        ctx.shadowBlur=10;
+        ctx.shadowColor=ctx.fillStyle;
+        ctx.fillRect(b.x-2,b.y,4,12);
+    });
+    ctx.shadowBlur=0;
+    
+    eBullets.forEach(b=>{
+        const sz=b.size||4;
+        
+        if(b.type==='eliteCharging') {
+            // CHARGING visual - pulses and grows!
+            const chargePct=Math.min(1,b.chargeProgress/b.maxCharge);
+            const pulse=Math.sin(performance.now()/30)*0.3+0.7;
+            const chargeSize=sz*(0.5+chargePct*0.8); // Grows as charges
+            
+            ctx.fillStyle='#ff8800';
+            ctx.shadowBlur=(20+chargePct*30)*pulse; // Brighter as charges
+            ctx.shadowColor='#ff8800';
+            
+            // Outer charging ring
+            ctx.globalAlpha=0.4+chargePct*0.4;
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,chargeSize*3*pulse,0,Math.PI*2);
+            ctx.fill();
+            ctx.globalAlpha=1;
+            
+            // Main orb
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,chargeSize,0,Math.PI*2);
+            ctx.fill();
+            
+            // Bright core (grows)
+            ctx.fillStyle='#ffffff';
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,chargeSize*0.6*chargePct,0,Math.PI*2);
+            ctx.fill();
+            
+            // Energy ring
+            ctx.strokeStyle='#ffff00';
+            ctx.lineWidth=2+chargePct*2;
+            ctx.globalAlpha=pulse*chargePct;
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,chargeSize*2,0,Math.PI*2);
+            ctx.stroke();
+            ctx.globalAlpha=1;
+        } else if(b.type==='zap') {
+            ctx.fillStyle='#00ffff';
+            ctx.shadowBlur=15;
+            ctx.shadowColor='#00ffff';
+            ctx.fillRect(b.x-sz/2,b.y-2,sz,8);
+            ctx.globalAlpha=0.5;
+            ctx.fillRect(b.x-sz,b.y-4,sz*2,12);
+            ctx.globalAlpha=1;
+        } else if(b.type==='tank'||b.type==='bomb'||b.type==='bossBomb'||b.type==='bossTele'||b.type==='shieldBreaker') {
+            if(b.type==='shieldBreaker') {
+                // MASSIVE shield-seeking bomb!
+                const pulse=Math.sin(performance.now()/50);
+                ctx.fillStyle='#ff0000';
+                ctx.shadowBlur=70+pulse*20;
+                ctx.shadowColor='#ff0000';
+                ctx.beginPath();
+                ctx.arc(b.x,b.y,sz,0,Math.PI*2);
+                ctx.fill();
+                // Skull icon
+                ctx.fillStyle='#000';
+                ctx.fillRect(b.x-sz/3,b.y-sz/3,sz/6,sz/6);
+                ctx.fillRect(b.x+sz/6,b.y-sz/3,sz/6,sz/6);
+                // HUGE warning aura
+                ctx.globalAlpha=0.6+pulse*0.3;
+                ctx.fillStyle='#ff0000';
+                ctx.beginPath();
+                ctx.arc(b.x,b.y,sz*5,0,Math.PI*2);
+                ctx.fill();
+                ctx.globalAlpha=1;
+            } else if(b.type==='bossTele') {
+                // Teleport strike bullets
+                ctx.fillStyle='#ffffff';
+                ctx.shadowBlur=40;
+                ctx.shadowColor='#ffffff';
+                ctx.beginPath();
+                ctx.arc(b.x,b.y,sz,0,Math.PI*2);
+                ctx.fill();
+                ctx.globalAlpha=0.5;
+                ctx.beginPath();
+                ctx.arc(b.x,b.y,sz*2,0,Math.PI*2);
+                ctx.fill();
+                ctx.globalAlpha=1;
+            } else {
+                const col=b.type==='bossBomb'?'#ffffff':b.type==='bomb'?'#ff00ff':'#ff6600';
+                ctx.fillStyle=col;
+                ctx.shadowBlur=25;
+                ctx.shadowColor=col;
+                ctx.beginPath();
+                ctx.arc(b.x,b.y,sz,0,Math.PI*2);
+                ctx.fill();
+                // Larger glow for big bombs
+                ctx.globalAlpha=0.4;
+                ctx.beginPath();
+                ctx.arc(b.x,b.y,sz*2.5,0,Math.PI*2);
+                ctx.fill();
+                ctx.globalAlpha=1;
+            }
+        } else if(b.type==='elite') {
+            // GLOWING charged projectiles!
+            const pulse=Math.sin(performance.now()/50)*0.3+0.7;
+            ctx.fillStyle='#ff8800';
+            ctx.shadowBlur=30*pulse;
+            ctx.shadowColor='#ff8800';
+            // Glowing trail
+            ctx.globalAlpha=0.7;
+            for(let i=1;i<=4;i++) {
+                ctx.beginPath();
+                ctx.arc(b.x,b.y+i*6,sz-i*0.5,0,Math.PI*2);
+                ctx.fill();
+            }
+            ctx.globalAlpha=1;
+            // Main projectile
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz,0,Math.PI*2);
+            ctx.fill();
+            // Bright core
+            ctx.fillStyle='#ffffff';
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz*0.5,0,Math.PI*2);
+            ctx.fill();
+            // Outer glow ring
+            ctx.strokeStyle='#ff8800';
+            ctx.lineWidth=2;
+            ctx.globalAlpha=pulse;
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz*1.5,0,Math.PI*2);
+            ctx.stroke();
+            ctx.globalAlpha=1;
+        } else if(b.type==='bomberWave') {
+            // Small fast magenta projectiles
+            ctx.fillStyle='#ff00ff';
+            ctx.shadowBlur=12;
+            ctx.shadowColor='#ff00ff';
+            ctx.fillRect(b.x-sz/2,b.y-sz/2,sz,sz);
+            ctx.globalAlpha=0.5;
+            ctx.fillRect(b.x-sz,b.y-sz,sz*2,sz*2);
+            ctx.globalAlpha=1;
+        } else if(b.type==='bossSpread') {
+            ctx.fillStyle='#ffffff';
+            ctx.shadowBlur=12;
+            ctx.shadowColor='#ffffff';
+            ctx.fillRect(b.x-sz/2,b.y-sz/2,sz,sz*2);
+            ctx.globalAlpha=0.5;
+            ctx.fillRect(b.x-sz,b.y-sz,sz*2,sz*3);
+            ctx.globalAlpha=1;
+        } else if(b.type==='bossDirect') {
+            ctx.fillStyle='#ff0000';
+            ctx.shadowBlur=20;
+            ctx.shadowColor='#ff0000';
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz,0,Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle='#ffffff';
+            ctx.fillRect(b.x-1,b.y-sz,2,sz*2);
+        } else if(b.type==='fast') {
+            ctx.fillStyle='#ffff00';
+            ctx.shadowBlur=15;
+            ctx.shadowColor='#ffff00';
+            ctx.fillRect(b.x-sz/2,b.y,sz,12);
+        } else if(b.type==='swarm') {
+            // Tiny orange stinger
+            ctx.fillStyle='#FFA500';
+            ctx.shadowBlur=8;
+            ctx.shadowColor='#FFA500';
+            ctx.fillRect(b.x-1,b.y,2,6);
+            ctx.globalAlpha=0.6;
+            ctx.fillRect(b.x-2,b.y-2,4,8);
+            ctx.globalAlpha=1;
+        } else if(b.type==='swarmLeader') {
+            // Orange leader projectile - larger stinger
+            ctx.fillStyle='#FFA500';
+            ctx.shadowBlur=15;
+            ctx.shadowColor='#FFA500';
+            ctx.fillRect(b.x-sz/2,b.y-2,sz,10);
+            // Glow trail
+            ctx.globalAlpha=0.5;
+            ctx.fillRect(b.x-sz,b.y-4,sz*2,14);
+            ctx.globalAlpha=1;
+        } else if(b.type==='phantom') {
+            // Ghostly purple projectile
+            ctx.globalAlpha=0.7;
+            ctx.fillStyle='#9D00FF';
+            ctx.shadowBlur=20;
+            ctx.shadowColor='#9D00FF';
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz,0,Math.PI*2);
+            ctx.fill();
+            // Wispy trail
+            for(let i=1;i<=3;i++) {
+                ctx.globalAlpha=0.4/i;
+                ctx.beginPath();
+                ctx.arc(b.x,b.y+i*5,sz-i,0,Math.PI*2);
+                ctx.fill();
+            }
+            ctx.globalAlpha=1;
+        } else if(b.type==='carrier') {
+            // Purple factory projectile
+            ctx.fillStyle='#8B00FF';
+            ctx.shadowBlur=25;
+            ctx.shadowColor='#8B00FF';
+            ctx.fillRect(b.x-sz/2,b.y-sz/2,sz,sz*2);
+            // Explosive glow
+            ctx.globalAlpha=0.5;
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz*2,0,Math.PI*2);
+            ctx.fill();
+            ctx.globalAlpha=1;
+        } else if(b.type==='warperCharging') {
+            // Warper charging beam
+            const sz=b.size||8;
+            const chargePct=Math.min(1,b.chargeProgress/b.maxCharge);
+            const pulse=Math.sin(performance.now()/40)*0.3+0.7;
+            ctx.fillStyle='#00BFFF';
+            ctx.shadowBlur=(30+chargePct*30)*pulse;
+            ctx.shadowColor='#00BFFF';
+            // Growing energy ball
+            ctx.globalAlpha=0.6+chargePct*0.4;
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz*(0.4+chargePct*0.6),0,Math.PI*2);
+            ctx.fill();
+            // Outer ring
+            ctx.strokeStyle='#fff';
+            ctx.lineWidth=3;
+            ctx.globalAlpha=pulse*chargePct;
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz*1.8,0,Math.PI*2);
+            ctx.stroke();
+            ctx.globalAlpha=1;
+        } else if(b.type==='warperBeam') {
+            // Warper beam - straight laser
+            ctx.fillStyle='#00BFFF';
+            ctx.shadowBlur=30;
+            ctx.shadowColor='#00BFFF';
+            ctx.fillRect(b.x-sz/2,b.y-10,sz,20);
+            // Bright core
+            ctx.fillStyle='#fff';
+            ctx.fillRect(b.x-sz/4,b.y-10,sz/2,20);
+            // Outer glow
+            ctx.globalAlpha=0.4;
+            ctx.fillStyle='#00BFFF';
+            ctx.fillRect(b.x-sz*1.5,b.y-12,sz*3,24);
+            ctx.globalAlpha=1;
+        } else if(b.type==='warperSuper') {
+            // SUPERSONIC DEVASTATING WARPER PROJECTILE!
+            const pulse=Math.sin(performance.now()/30);
+            ctx.fillStyle='#00BFFF';
+            ctx.shadowBlur=60+pulse*20;
+            ctx.shadowColor='#00BFFF';
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz,0,Math.PI*2);
+            ctx.fill();
+            // Bright white core
+            ctx.fillStyle='#ffffff';
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz*0.6,0,Math.PI*2);
+            ctx.fill();
+            // MASSIVE glowing aura
+            ctx.globalAlpha=0.6+pulse*0.3;
+            ctx.fillStyle='#00BFFF';
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz*4,0,Math.PI*2);
+            ctx.fill();
+            ctx.globalAlpha=0.4;
+            ctx.fillStyle='#ffffff';
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz*2.5,0,Math.PI*2);
+            ctx.fill();
+            // Energy trail
+            for(let i=1;i<=5;i++) {
+                ctx.globalAlpha=0.5/i;
+                ctx.beginPath();
+                ctx.arc(b.x,b.y-i*15,sz-i*2,0,Math.PI*2);
+                ctx.fill();
+            }
+            ctx.globalAlpha=1;
+        } else if(b.type==='fortressBomb') {
+            // MASSIVE fortress bomb
+            ctx.fillStyle='#8B0000';
+            ctx.shadowBlur=35;
+            ctx.shadowColor='#8B0000';
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz,0,Math.PI*2);
+            ctx.fill();
+            // Armored shell
+            ctx.strokeStyle='#a00';
+            ctx.lineWidth=3;
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz*0.8,0,Math.PI*2);
+            ctx.stroke();
+            // HUGE explosive aura
+            ctx.globalAlpha=0.3;
+            ctx.fillStyle='#ff0000';
+            ctx.beginPath();
+            ctx.arc(b.x,b.y,sz*3,0,Math.PI*2);
+            ctx.fill();
+            ctx.globalAlpha=1;
+        } else {
+            ctx.fillStyle='#ff0000';
+            ctx.shadowBlur=12;
+            ctx.shadowColor='#ff0000';
+            ctx.fillRect(b.x-2,b.y,4,10);
+        }
+        ctx.shadowBlur=0;
+        ctx.globalAlpha=1;
+    });
+    
+    // CLASSIC SPACE INVADERS ALIENS - EXACTLY like the reference
+    enemies.forEach(e=>{
+        const cx=e.x+e.w/2, cy=e.y+e.h/2, s=e.w;
+        const px=s/11; // Pixel size
+        
+        ctx.fillStyle=e.col;
+        ctx.shadowBlur=15;
+        ctx.shadowColor=e.col;
+        
+        if(e.type==='SCOUT') {
+            // Top row - squid (3 bumps on top)
+            ctx.fillRect(cx-px*3,cy-px*5,px,px);
+            ctx.fillRect(cx-px,cy-px*5,px,px);
+            ctx.fillRect(cx+px*2,cy-px*5,px,px);
+            // Head
+            ctx.fillRect(cx-px*4,cy-px*4,px*8,px*2);
+            ctx.fillRect(cx-px*5,cy-px*2,px*10,px*2);
+            // Body
+            ctx.fillRect(cx-px*4,cy,px*8,px*2);
+            // Side fins
+            ctx.fillRect(cx-px*6,cy-px*1,px,px*3);
+            ctx.fillRect(cx+px*5,cy-px*1,px,px*3);
+            // Eyes
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px*2.5,cy-px*2,px,px);
+            ctx.fillRect(cx+px*1.5,cy-px*2,px,px);
+        } else if(e.type==='ZAP') {
+            // Middle row - crab
+            ctx.fillStyle=e.col;
+            // Top bumps
+            ctx.fillRect(cx-px*3,cy-px*5,px,px);
+            ctx.fillRect(cx+px*2,cy-px*5,px,px);
+            // Head
+            ctx.fillRect(cx-px*4,cy-px*4,px*8,px*2);
+            ctx.fillRect(cx-px*4.5,cy-px*2,px*9,px*2);
+            // Body
+            ctx.fillRect(cx-px*3.5,cy,px*7,px*2);
+            // Claws
+            ctx.fillRect(cx-px*5.5,cy-px*2,px,px*4);
+            ctx.fillRect(cx+px*4.5,cy-px*2,px,px*4);
+            // Eyes
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px*2,cy-px*2,px,px);
+            ctx.fillRect(cx+px,cy-px*2,px,px);
+        } else if(e.type==='SPLITTER') {
+            // Bottom row - octopus
+            ctx.fillStyle=e.col;
+            // Head bumps
+            ctx.fillRect(cx-px*3.5,cy-px*4,px,px);
+            ctx.fillRect(cx-px*1,cy-px*4,px,px);
+            ctx.fillRect(cx+px*2.5,cy-px*4,px,px);
+            // Head
+            ctx.fillRect(cx-px*4,cy-px*3,px*8,px*2);
+            ctx.fillRect(cx-px*5,cy-px*1,px*10,px*2);
+            // Body
+            ctx.fillRect(cx-px*4,cy+px,px*8,px*2);
+            // Bottom tentacles
+            ctx.fillRect(cx-px*3.5,cy+px*3,px,px*2);
+            ctx.fillRect(cx+px*2.5,cy+px*3,px,px*2);
+            // Eyes
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px*2.5,cy-px,px,px);
+            ctx.fillRect(cx+px*1.5,cy-px,px,px);
+        } else if(e.type==='TANK') {
+            // Tank version - bigger, armored
+            ctx.fillStyle=e.col;
+            // Turret
+            ctx.fillRect(cx-px*2,cy-px*5,px*4,px);
+            // Top armor
+            ctx.fillRect(cx-px*4,cy-px*4,px*8,px*2);
+            // Main body
+            ctx.fillRect(cx-px*5,cy-px*2,px*10,px*3);
+            // Side cannons
+            ctx.fillRect(cx-px*6,cy-px*1,px,px*2);
+            ctx.fillRect(cx+px*5,cy-px*1,px,px*2);
+            // Lower armor
+            ctx.fillRect(cx-px*4,cy+px,px*8,px*2);
+            // Eyes
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px*2,cy-px*1,px,px);
+            ctx.fillRect(cx+px,cy-px*1,px,px);
+        } else if(e.type==='BOMBER') {
+            // Bomber - UFO style
+            ctx.fillStyle=e.col;
+            // Dome top
+            ctx.fillRect(cx-px*2,cy-px*5,px*4,px);
+            ctx.fillRect(cx-px*3,cy-px*4,px*6,px);
+            // Main saucer
+            ctx.fillRect(cx-px*5,cy-px*3,px*10,px*2);
+            ctx.fillRect(cx-px*6,cy-px*1,px*12,px*2);
+            // Bottom weapons
+            ctx.fillRect(cx-px*4,cy+px,px*2,px*2);
+            ctx.fillRect(cx-px*1,cy+px,px*2,px*2);
+            ctx.fillRect(cx+px*2,cy+px,px*2,px*2);
+            // Windows
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px*2,cy-px*2,px,px);
+            ctx.fillRect(cx+px,cy-px*2,px,px);
+        } else if(e.type==='ELITE') {
+            // Elite fighter
+            ctx.fillStyle=e.col;
+            // Cockpit spike
+            ctx.fillRect(cx-px*0.5,cy-px*5,px,px);
+            // Head
+            ctx.fillRect(cx-px*3,cy-px*4,px*6,px);
+            ctx.fillRect(cx-px*4,cy-px*3,px*8,px*2);
+            // Main body
+            ctx.fillRect(cx-px*3.5,cy-px*1,px*7,px*3);
+            // Wings
+            ctx.fillRect(cx-px*5.5,cy-px*0.5,px,px*3);
+            ctx.fillRect(cx+px*4.5,cy-px*0.5,px,px*3);
+            // Engine ports
+            ctx.fillRect(cx-px*2.5,cy+px*2,px,px);
+            ctx.fillRect(cx+px*1.5,cy+px*2,px,px);
+            // Eyes
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px*1.5,cy-px*1,px,px);
+            ctx.fillRect(cx+px*0.5,cy-px*1,px,px);
+        } else if(e.type==='BOSS') {
+            // Boss mothership
+            ctx.fillStyle=e.col;
+            // Bridge tower
+            ctx.fillRect(cx-px*2,cy-px*6,px*4,px*2);
+            // Main deck
+            ctx.fillRect(cx-px*6,cy-px*4,px*12,px*3);
+            // Hull
+            ctx.fillRect(cx-px*7,cy-px*1,px*14,px*4);
+            // Side wings
+            ctx.fillRect(cx-px*8,cy,px,px*3);
+            ctx.fillRect(cx+px*7,cy,px,px*3);
+            // Weapons
+            ctx.fillRect(cx-px*5,cy+px*3,px*2,px);
+            ctx.fillRect(cx-px*1,cy+px*3,px*2,px);
+            ctx.fillRect(cx+px*3,cy+px*3,px*2,px);
+            // Bridge windows
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px,cy-px*5,px*2,px);
+        } else if(e.type==='SWARM') {
+            // SWARM - Tiny bee-like insect
+            ctx.fillStyle=e.col;
+            const spx=s/15; // Smaller pixel size
+            // Wings
+            ctx.fillRect(cx-spx*4,cy-spx*2,spx*2,spx);
+            ctx.fillRect(cx+spx*2,cy-spx*2,spx*2,spx);
+            // Body
+            ctx.fillRect(cx-spx*2,cy-spx*3,spx*4,spx*5);
+            // Stripes
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-spx*2,cy-spx*1,spx*4,spx);
+            ctx.fillRect(cx-spx*2,cy+spx,spx*4,spx);
+            // Eyes
+            ctx.fillStyle='#fff';
+            ctx.fillRect(cx-spx,cy-spx*2,spx,spx);
+            ctx.fillRect(cx,cy-spx*2,spx,spx);
+        } else if(e.type==='SWARM_LEADER') {
+            // SWARM_LEADER - Larger commanding bee
+            ctx.fillStyle=e.col;
+            // Antenna
+            ctx.fillRect(cx-px*3,cy-px*5,px,px);
+            ctx.fillRect(cx+px*2,cy-px*5,px,px);
+            // Head with crown
+            ctx.fillRect(cx-px*3,cy-px*4,px*6,px*2);
+            ctx.fillRect(cx-px*1,cy-px*5,px*2,px); // Crown
+            // Body segments
+            ctx.fillRect(cx-px*4,cy-px*2,px*8,px*2);
+            ctx.fillRect(cx-px*3,cy,px*6,px*2);
+            // Wings
+            ctx.fillRect(cx-px*5,cy-px*1,px,px*3);
+            ctx.fillRect(cx+px*4,cy-px*1,px,px*3);
+            // Stripes (black)
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px*3,cy-px*1,px*6,px);
+            ctx.fillRect(cx-px*2,cy+px,px*4,px);
+            // Eyes
+            ctx.fillStyle='#fff';
+            ctx.fillRect(cx-px*2,cy-px*3,px,px);
+            ctx.fillRect(cx+px,cy-px*3,px,px);
+        } else if(e.type==='MEDIC') {
+            // MEDIC - Medical cross support unit
+            ctx.fillStyle=e.col;
+            // Medical cross on head
+            ctx.fillRect(cx-px*0.5,cy-px*5,px,px*3);
+            ctx.fillRect(cx-px*1.5,cy-px*4,px*3,px);
+            // Head
+            ctx.fillRect(cx-px*3,cy-px*3,px*6,px*2);
+            // Body with medical symbol
+            ctx.fillRect(cx-px*4,cy-px*1,px*8,px*3);
+            // Arms (healing rays)
+            ctx.fillRect(cx-px*5,cy,px,px*2);
+            ctx.fillRect(cx+px*4,cy,px,px*2);
+            // Legs
+            ctx.fillRect(cx-px*3,cy+px*2,px*2,px);
+            ctx.fillRect(cx+px,cy+px*2,px*2,px);
+            // Eyes
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px*1.5,cy-px*2,px,px);
+            ctx.fillRect(cx+px*0.5,cy-px*2,px,px);
+            // MASSIVE PULSING HEALING AURA!
+            if(e.pulsePhase) {
+                const pulse=Math.sin(e.pulsePhase)*0.5+0.5;
+                ctx.globalAlpha=0.3*pulse;
+                ctx.strokeStyle='#00FF88';
+                ctx.lineWidth=4;
+                ctx.shadowBlur=30;
+                ctx.shadowColor='#00FF88';
+                ctx.beginPath();
+                ctx.arc(cx,cy,150,0,Math.PI*2);
+                ctx.stroke();
+                ctx.globalAlpha=0.15*pulse;
+                ctx.beginPath();
+                ctx.arc(cx,cy,130,0,Math.PI*2);
+                ctx.stroke();
+                ctx.globalAlpha=1;
+                ctx.shadowBlur=0;
+            }
+        } else if(e.type==='PHANTOM') {
+            // PHANTOM - Ghostly teleporter
+            if(e.invisible) ctx.globalAlpha=0.2; // Very transparent when teleporting
+            else ctx.globalAlpha=0.7; // Always semi-transparent
+            ctx.fillStyle=e.col;
+            // Ghostly hood
+            ctx.fillRect(cx-px*3,cy-px*4,px*6,px);
+            ctx.fillRect(cx-px*4,cy-px*3,px*8,px*2);
+            // Face/body
+            ctx.fillRect(cx-px*3,cy-px*1,px*6,px*3);
+            // Wispy bottom
+            ctx.fillRect(cx-px*4,cy+px*2,px*2,px);
+            ctx.fillRect(cx-px*1,cy+px*2,px*2,px);
+            ctx.fillRect(cx+px*2,cy+px*2,px*2,px);
+            // Dark dull eyes
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px*2,cy-px*1,px,px);
+            ctx.fillRect(cx+px,cy-px*1,px,px);
+            ctx.globalAlpha=1;
+        } else if(e.type==='CARRIER') {
+            // CARRIER - Massive factory ship
+            
+            // GLOW RENDERS FIRST (behind ship)!
+            if(e.mode==='production') {
+                const pulse=Math.abs(Math.sin(e.pulsePhase||0));
+                const flickerIntensity = e.productionHits ? (1 - e.productionHits*0.25) : 1; // Dims with hits
+                // MASSIVE beating production glow BEHIND - DIMMER!
+                ctx.globalAlpha=(0.2+pulse*0.25)*flickerIntensity;
+                ctx.fillStyle='#8B00FF';
+                ctx.shadowBlur=30+pulse*25;
+                ctx.shadowColor='#8B00FF';
+                ctx.beginPath();
+                ctx.arc(cx,cy,e.w/0.9+pulse*15,0,Math.PI*2);
+                ctx.fill();
+                // Inner bright pulse
+                ctx.globalAlpha=(0.3+pulse*0.3)*flickerIntensity;
+                ctx.fillStyle='#ff00ff';
+                ctx.beginPath();
+                ctx.arc(cx,cy,e.w/1.5+pulse*12,0,Math.PI*2);
+                ctx.fill();
+                ctx.globalAlpha=1;
+                ctx.shadowBlur=0;
+            }
+            
+            // NOW draw ship on top
+            ctx.fillStyle=e.col;
+            // Command tower
+            ctx.fillRect(cx-px*2,cy-px*6,px*4,px*2);
+            // Upper deck
+            ctx.fillRect(cx-px*5,cy-px*4,px*10,px*2);
+            // Main hull
+            ctx.fillRect(cx-px*6,cy-px*2,px*12,px*4);
+            // Hangar bays
+            ctx.fillRect(cx-px*4,cy+px*2,px*3,px);
+            ctx.fillRect(cx+px,cy+px*2,px*3,px);
+            // Production ports (glowing when active)
+            if(e.mode==='production') {
+                const pulse=Math.abs(Math.sin(e.pulsePhase||0));
+                ctx.fillStyle='#fff';
+                ctx.shadowBlur=20+pulse*20;
+                ctx.shadowColor='#8B00FF';
+                ctx.fillRect(cx-px*3,cy+px*2,px*2,px);
+                ctx.fillRect(cx+px,cy+px*2,px*2,px);
+                ctx.shadowBlur=0;
+            }
+            // Windows
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px,cy-px*5,px*2,px);
+            ctx.fillRect(cx-px*3,cy-px*1,px,px);
+            ctx.fillRect(cx+px*2,cy-px*1,px,px);
+        } else if(e.type==='WARPER') {
+            // WARPER - Space-bending entity
+            
+            // CHARGING GLOW (if charging)
+            if(e.charging) {
+                const chargePct=e.chargeTime/e.chargeMax;
+                const pulse=Math.sin(performance.now()/(100-chargePct*80));
+                ctx.globalAlpha=0.3+chargePct*0.5+pulse*0.2;
+                ctx.fillStyle='#00BFFF';
+                ctx.shadowBlur=40+chargePct*40;
+                ctx.shadowColor='#00BFFF';
+                ctx.beginPath();
+                ctx.arc(cx,cy,e.w/1.5+chargePct*20,0,Math.PI*2);
+                ctx.fill();
+                ctx.globalAlpha=1;
+                ctx.shadowBlur=0;
+            }
+            
+            // GRAVITY FIELD VISUAL - LARGE 200px radius ring!
+            ctx.strokeStyle='#00BFFF';
+            ctx.lineWidth=3;
+            ctx.globalAlpha=0.3+Math.sin(e.angle*4)*0.2;
+            ctx.shadowBlur=20;
+            ctx.shadowColor='#00BFFF';
+            ctx.beginPath();
+            ctx.arc(cx,cy,200,0,Math.PI*2); // Full 200px gravity radius!
+            ctx.stroke();
+            // Inner pulsing ring
+            ctx.globalAlpha=0.5+Math.sin(e.angle*6)*0.3;
+            ctx.beginPath();
+            ctx.arc(cx,cy,150,0,Math.PI*2);
+            ctx.stroke();
+            ctx.globalAlpha=1;
+            ctx.shadowBlur=0;
+            
+            // NOW draw warper body on top
+            ctx.fillStyle=e.col;
+            // Energy core top
+            ctx.fillRect(cx-px*2,cy-px*5,px*4,px);
+            // Warping body
+            ctx.fillRect(cx-px*3,cy-px*4,px*6,px*2);
+            ctx.fillRect(cx-px*4,cy-px*2,px*8,px*2);
+            ctx.fillRect(cx-px*3,cy,px*6,px*2);
+            // Distortion field generators
+            ctx.fillRect(cx-px*5,cy-px*1,px,px*2);
+            ctx.fillRect(cx+px*4,cy-px*1,px,px*2);
+            // Small animated ring on body
+            ctx.strokeStyle='#fff';
+            ctx.lineWidth=2;
+            ctx.globalAlpha=0.6;
+            ctx.beginPath();
+            ctx.arc(cx,cy,e.w/2+Math.sin(e.angle*4)*5,0,Math.PI*2);
+            ctx.stroke();
+            ctx.globalAlpha=1;
+            // Dark dull core eyes
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px*2,cy-px*2,px,px);
+            ctx.fillRect(cx+px,cy-px*2,px,px);
+        } else if(e.type==='FORTRESS') {
+            // FORTRESS - Ultimate armored tank
+            ctx.fillStyle=e.col;
+            // Heavy turret
+            ctx.fillRect(cx-px*2,cy-px*6,px*4,px*2);
+            ctx.fillRect(cx-px*1,cy-px*7,px*2,px);
+            // Upper armor
+            ctx.fillRect(cx-px*5,cy-px*4,px*10,px*2);
+            // Main fortress body
+            ctx.fillRect(cx-px*6,cy-px*2,px*12,px*4);
+            // Heavy cannons
+            ctx.fillRect(cx-px*7,cy-px*1,px,px*3);
+            ctx.fillRect(cx+px*6,cy-px*1,px,px*3);
+            // Lower armor plating
+            ctx.fillRect(cx-px*5,cy+px*2,px*10,px);
+            // Treads
+            ctx.fillRect(cx-px*6,cy+px*3,px*3,px);
+            ctx.fillRect(cx+px*3,cy+px*3,px*3,px);
+            // Armor details (lighter shade)
+            ctx.fillStyle='#a00';
+            ctx.fillRect(cx-px*4,cy-px*1,px*8,px);
+            ctx.fillRect(cx-px*3,cy+px,px*6,px);
+            // Eyes/viewports
+            ctx.fillStyle='#000';
+            ctx.fillRect(cx-px*2,cy-px*2,px,px);
+            ctx.fillRect(cx+px,cy-px*2,px,px);
+        } else {
+            // Fallback for any unknown type
+            ctx.fillStyle=e.col;
+            ctx.fillRect(cx-px*3,cy-px*3,px*6,px*6);
+        }
+        
+        ctx.shadowBlur=0;
+        ctx.globalAlpha=1;
+        
+        if(e.hp<e.maxHp) {
+            const bw=e.w-8;
+            ctx.fillStyle='#600';
+            ctx.fillRect(e.x+4,e.y-8,bw,3);
+            ctx.fillStyle='#0f0';
+            ctx.fillRect(e.x+4,e.y-8,bw*(e.hp/e.maxHp),3);
+        }
+        
+        // WARPER energy charge bar!
+        if(e.gravity && e.charging) {
+            const bw=e.w-8;
+            const chargePct=e.chargeTime/e.chargeMax;
+            ctx.fillStyle='#003';
+            ctx.fillRect(e.x+4,e.y-13,bw,3);
+            ctx.fillStyle='#00BFFF';
+            ctx.shadowBlur=10+chargePct*15;
+            ctx.shadowColor='#00BFFF';
+            ctx.fillRect(e.x+4,e.y-13,bw*chargePct,3);
+            ctx.shadowBlur=0;
+        }
+    });
+    
+    powerups.forEach(p=>{
+        const col=p.type==='heal'?'#ff0000':p.type==='rapid'?'#ffff00':p.type==='shield'?'#00ff00':'#ff00ff';
+        ctx.fillStyle=col;
+        ctx.shadowBlur=15;
+        ctx.shadowColor=col;
+        ctx.fillRect(p.x-12,p.y-12,24,24);
+        ctx.shadowBlur=0;
+    });
+    
+    particles.forEach(p=>{ctx.globalAlpha=p.life;ctx.fillStyle=p.col;ctx.fillRect(p.x-p.sz/2,p.y-p.sz/2,p.sz,p.sz);});
+    ctx.globalAlpha=1;
+    
+    ctx.restore();
+}
+
+document.addEventListener('keydown',e=>{
+    keys[e.key]=true;
+    if(e.key===' '&&!gameOver&&!spacePressed&&bullets.length<(rapidFire?8:5)) {
+        spacePressed=true;
+        bullets.push({x:player.x+player.w/2,y:player.y,boosted:projectileBoost});
+        // Varied pitch shooting sound! (900-1100Hz)
+        tone(900+Math.random()*200,0.08,'square',0.08);
+    }
+    
+    // 🎮 CHEAT CODE: Press 'X' to spawn all alien types!
+    if(e.key==='x'||e.key==='X') {
+        if(!gameOver) {
+            const allTypes=['SCOUT','ZAP','TANK','SPLITTER','BOMBER','ELITE','BOSS',
+                           'SWARM_LEADER','MEDIC','PHANTOM','CARRIER','WARPER','FORTRESS'];
+            let xPos=100;
+            allTypes.forEach(type=>{
+                if(type==='SWARM_LEADER') {
+                    // Spawn with swarm
+                    const leader=createEnemy('SWARM_LEADER',xPos,150);
+                    leader.swarmId=performance.now();
+                    enemies.push(leader);
+                    for(let s=0;s<6;s++) {
+                        const angle=(s/6)*Math.PI*2;
+                        const member=createEnemy('SWARM',xPos+Math.cos(angle)*30,150+Math.sin(angle)*30);
+                        member.swarmId=leader.swarmId;
+                        member.leaderRef=leader;
+                        member.orbitAngle=angle;
+                        member.orbitPhase=s;
+                        enemies.push(member);
+                    }
+                } else {
+                    enemies.push(createEnemy(type,xPos,150));
+                }
+                xPos+=60;
+                if(xPos>W-100) xPos=100;
+            });
+            tone(1500,0.3,'square',0.15);
+            shake(15);
+        }
+    }
+});
+document.addEventListener('keyup',e=>{
+    keys[e.key]=false;
+    if(e.key===' ')spacePressed=false;
+});
+
+let lastTime=performance.now();
+function loop(t) {
+    const dt=Math.min((t-lastTime)/1000,0.1);
+    lastTime=t;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+}
+
+init();
+loop(performance.now());
+    </script>
+</body>
+</html>

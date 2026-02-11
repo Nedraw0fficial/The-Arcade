@@ -188,7 +188,7 @@ function createEnemy(type,x,y) {
 
 function showWave() {
     const wt=document.getElementById('wt');
-    wt.textContent=wave%5===0?'⚠ BOSS WAVE ⚠':`WAVE ${wave}`;
+    wt.textContent=wave%5===0?'⚠ BOSS ⚠':`WAVE ${wave}`;
     wt.style.display='block';
     wt.style.animation='none';
     setTimeout(()=>wt.style.animation='w 2s',10);
