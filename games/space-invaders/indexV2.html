@@ -10,7 +10,7 @@
         .wrap { position: relative; }
         canvas { display: block; background: #000; border: 3px solid #00ff00; box-shadow: 0 0 30px rgba(0,255,0,0.5); image-rendering: pixelated; }
         .ui { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 40px; font-size: 18px; color: #00ff00; text-shadow: 0 0 8px #00ff00; z-index: 10; }
-        .hp-bar { position: absolute; top: 15px; left: 20px; width: 250px; height: 18px; background: #300; border: 2px solid #00ff00; z-index: 10; }
+        .hp-bar { position: absolute; top: 10px; left: 10px; width: 200px; height: 18px; background: #300; border: 2px solid #00ff00; z-index: 10; }
         .hp-fill { height: 100%; background: linear-gradient(90deg, #ff0000, #ffff00, #00ff00); box-shadow: 0 0 10px #00ff00; transition: width 0.3s; }
         .over { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.95); padding: 50px 70px; border: 3px solid #ff0000; box-shadow: 0 0 40px rgba(255,0,0,0.6); text-align: center; display: none; z-index: 20; border-radius: 8px; }
         .over h2 { font-size: 40px; color: #ff0000; text-shadow: 0 0 20px #ff0000; margin-bottom: 20px; }
@@ -44,7 +44,7 @@ const W=900, H=700;
 c.width=W; c.height=H;
 
 function resize() {
-    const scale = Math.min(window.innerWidth/W, window.innerHeight/H)*0.95;
+    const scale = Math.min(window.innerWidth/W, window.innerHeight/H)*0.55;
     c.style.width=(W*scale)+'px';
     c.style.height=(H*scale)+'px';
 }
