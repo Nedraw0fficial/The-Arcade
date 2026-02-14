@@ -61,6 +61,16 @@ const GAMES = [
         color: '#5d00ff',
         year: 'February 8th, 2026',
         releaseDate: '2026-02-08'
+    },
+    {
+        id: 'bomberman',
+        title: 'BOMBERMAN',
+        description: 'Classic maze-based multiplayer action game',
+        logo: 'assets/games/bomberman/logo.png',
+        path: 'games/bomberman/index.html',
+        color: '#ff00aa',
+        year: 'February 12th, 2026',
+        releaseDate: '2026-02-12'
     }
 ];
     // 🎯 ADD MORE GAMES HERE - Just copy the format above

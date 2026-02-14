@@ -58,16 +58,16 @@ const TYPES = {
     TANK: {hp:5,col:'#ff0000',sz:52,pts:50,dmg:3,fire:0.0004,wt:15},
     SPLITTER: {hp:2,col:'#ffff00',sz:40,pts:40,dmg:1,fire:0.0012,wt:25,split:true},
     BOMBER: {hp:3,col:'#ff00ff',sz:46,pts:60,dmg:5,fire:0.0008,wt:10},
-    ELITE: {hp:4,col:'#ff8800',sz:44,pts:100,dmg:2,fire:0.0012,wt:5},
+    ELITE: {hp:4,col:'#ff8800',sz:52,pts:100,dmg:2,fire:0.0012,wt:5},
     BOSS: {hp:60,col:'#ffffff',sz:80,pts:500,dmg:5,fire:0.0025,wt:1}, // 6x HP! Faster attacks!
     // 🌟 NEW ALIENS! 🌟
-    SWARM: {hp:1,col:'#FFA500',sz:28,pts:5,dmg:1,fire:0.0015,wt:50}, // Tiny, fast (was 24)
-    SWARM_LEADER: {hp:2,col:'#FFA500',sz:46,pts:25,dmg:1,fire:0.001,wt:0,leader:true}, // Leader! (was 42)
+    SWARM: {hp:1,col:'#FFA500',sz:32,pts:5,dmg:1,fire:0.0015,wt:50}, // Tiny, fast (was 24)
+    SWARM_LEADER: {hp:2,col:'#FFA500',sz:50,pts:25,dmg:1,fire:0.001,wt:0,leader:true}, // Leader! (was 42)
     MEDIC: {hp:4,col:'#00FF88',sz:36,pts:120,dmg:0,fire:0,wt:8,healer:true}, // Support
-    PHANTOM: {hp:2,col:'#9D00FF',sz:36,pts:80,dmg:2,fire:0.001,wt:12,teleporter:true}, // Teleporter (was 30)
+    PHANTOM: {hp:2,col:'#9D00FF',sz:40,pts:80,dmg:2,fire:0.001,wt:12,teleporter:true}, // Teleporter (was 30)
     CARRIER: {hp:8,col:'#8B00FF',sz:56,pts:150,dmg:4,fire:0.0006,wt:6,producer:true}, // Factory
     WARPER: {hp:5,col:'#00BFFF',sz:42,pts:140,dmg:3,fire:0.0008,wt:7,gravity:true}, // Bender
-    FORTRESS: {hp:12,col:'#8B0000',sz:60,pts:200,dmg:5,fire:0.0003,wt:4,armored:true} // Tank
+    FORTRESS: {hp:12,col:'#8B0000',sz:66,pts:200,dmg:5,fire:0.0003,wt:4,armored:true} // Tank
 };
 
 let player,bullets,eBullets,enemies,particles,stars,shields,powerups;
@@ -132,9 +132,9 @@ function spawnWave() {
     const waveInCycle = ((wave-1)%7)+1; // 1-6 within cycle, or 7 for boss
     
     // Unlock aliens based on completed boss waves (every 7 waves)
-    const unlockedTypes = ['SCOUT', 'SPLITTER'];
+    const unlockedTypes = ['SCOUT', 'SPLITTER', 'SWARM']; // Always available
     if(cycle>=1) unlockedTypes.push('ZAP');         // After wave 7
-    if(cycle>=2) unlockedTypes.push('TANK','SWARM');  // After wave 14
+    if(cycle>=2) unlockedTypes.push('TANK');  // After wave 14
     if(cycle>=3) unlockedTypes.push('BOMBER','MEDIC'); // After wave 21
     if(cycle>=4) unlockedTypes.push('ELITE','PHANTOM'); // After wave 28
     if(cycle>=5) unlockedTypes.push('CARRIER','WARPER'); // After wave 35
@@ -262,6 +262,10 @@ function spawnWave() {
                     leader.swarmId = performance.now(); // Unique ID for this swarm
                     enemies.push(leader);
                     spawnedCount++;
+
+                    //if (random() < 0.02) { // 2% chance for MASSIVE SWARM
+                        //swarmCount += 12; // Add 12 more members (total 17-20)
+                    //}
                     
                     // Create small swarm members around leader with UNIQUE positions
                     for(let s=0;s<swarmCount;s++) {
@@ -274,7 +278,8 @@ function spawnWave() {
                         member.orbitAngle = angle; // Each has different starting angle!
                         member.orbitPhase = s; // Unique phase offset
                         enemies.push(member);
-                        spawnedCount++;
+                        //spawnedCount++;
+                        // Note: We don't count swarm members towards totalAliens to allow full groups to spawn without cutting off mid-group
                     }
                 } else {
                     enemies.push(createEnemy(type, startX+c*70, 40+r*55));
@@ -322,7 +327,7 @@ function createEnemy(type,x,y) {
 function showWave() {
     const wt=document.getElementById('wt');
     const isBoss = wave%7===0; // Calculate here too!
-    wt.textContent=isBoss?'⚠ BOSS WAVE ⚠':`WAVE ${wave}`;
+    wt.textContent=isBoss?'⚠ BOSS ⚠':`WAVE ${wave}`;
     wt.style.display='block';
     wt.style.animation='none';
     setTimeout(()=>wt.style.animation='w 2s',10);
@@ -867,7 +872,7 @@ function update(dt) {
                 
                 // After 6 seconds - PRODUCE!
                 if(e.productionTimer>=6) {
-                    const spawnTypes=['SCOUT','ZAP','TANK','SPLITTER','BOMBER','ELITE'];
+                    const spawnTypes=['SCOUT','ZAP','TANK','SPLITTER','BOMBER','ELITE', 'MEDIC', 'PHANTOM', 'WARPER', 'SWARM_LEADER'];
                     let spawnCount=3-e.productionHits; // 3, 2, 1, or 0 based on hits
                     if(spawnCount<0) spawnCount=0;
                     
@@ -878,6 +883,23 @@ function update(dt) {
                             const xOffset=(Math.random()-0.5)*120; // Spread horizontally
                             const yOffset=-40-Math.random()*100; // Spread vertically in back ranks
                             enemies.push(createEnemy(type,e.x+e.w/2+xOffset,e.y+yOffset));
+                            if (type==='SWARM_LEADER') {
+                                const leader = enemies[enemies.length-1];
+                                leader.swarmId = performance.now();
+                                // Spawn 3-7 swarm members around leader
+                                const swarmCount = 3+Math.floor(Math.random()*4);
+                                for(let s=0;s<swarmCount;s++) {
+                                    const angle = (s/swarmCount)*Math.PI*2;
+                                    const offsetX = Math.cos(angle)*30;
+                                    const offsetY = Math.sin(angle)*30;
+                                    const member = createEnemy('SWARM', e.x+e.w/2+xOffset+offsetX, e.y+yOffset+offsetY);
+                                    member.swarmId = leader.swarmId;
+                                    member.leaderRef = leader;
+                                    member.orbitAngle = angle;
+                                    member.orbitPhase = s;
+                                    enemies.push(member);
+                                }
+                            }
                         }
                         if(spawnCount>0) {
                             parts(e.x+e.w/2,e.y+e.h,'#8B00FF',30);
@@ -886,9 +908,9 @@ function update(dt) {
                         }
                     }
                     
-                    // BONUS: Gain 1 HP if not hit!
+                    // BONUS: Gain 2 HP if not hit!
                     if(e.productionHits===0 && e.hp<e.maxHp) {
-                        e.hp=Math.min(e.maxHp,e.hp+1);
+                        e.hp=Math.min(e.maxHp,e.hp+2);
                         parts(e.x+e.w/2,e.y+e.h/2,'#00ff00',20);
                         tone(600,0.2,'sine',0.06);
                     }
@@ -1263,8 +1285,8 @@ function update(dt) {
                         charging2.shouldRemove=true;
                         
                         const currentCX=e.x+e.w/2, currentCY=e.y+e.h;
-                        const leftAngle=-0.5;
-                        const rightAngle=0.5;
+                        const leftAngle=-0.4;
+                        const rightAngle=0.4;
                         
                         // Explosion particles
                         for(let j=0;j<15;j++) {
