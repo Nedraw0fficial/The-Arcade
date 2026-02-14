@@ -252,30 +252,32 @@ function spawnWave() {
                 const type = pickWeighted(weights);
                 
                 // SWARM spawns in groups with LEADER in center!
-                if(type==='SWARM' && spawnedCount+6<=totalAliens) {
-                    const swarmCount = 5+Math.floor(Math.random()*4); // 5-8 small ones
+                if(type==='SWARM') { // REMOVED the hardcoded check!
                     const baseX = startX+c*70;
                     const baseY = 40+r*55;
                     
-                    // Create LEADER in center
+                    // Create LEADER in center FIRST
                     const leader = createEnemy('SWARM_LEADER', baseX, baseY);
                     leader.swarmId = performance.now(); // Unique ID for this swarm
                     enemies.push(leader);
                     spawnedCount++;
                     
+                    // NOW determine swarm count based on whether it's mega or not
+                    const swarmCount = leader.isMega ? leader.megaSwarmCount : (4+Math.floor(Math.random()*3));
+                    const orbitDist = leader.isMega ? 55 : 30;
+                    
                     // Create small swarm members around leader with UNIQUE positions
                     for(let s=0;s<swarmCount;s++) {
                         const angle = (s/swarmCount)*Math.PI*2;
-                        const offsetX = Math.cos(angle)*30;
-                        const offsetY = Math.sin(angle)*30;
+                        const offsetX = Math.cos(angle)*orbitDist;
+                        const offsetY = Math.sin(angle)*orbitDist;
                         const member = createEnemy('SWARM', baseX+offsetX, baseY+offsetY);
                         member.swarmId = leader.swarmId; // Link to leader
                         member.leaderRef = leader; // Direct reference
                         member.orbitAngle = angle; // Each has different starting angle!
                         member.orbitPhase = s; // Unique phase offset
                         enemies.push(member);
-                        //spawnedCount++;
-                        // Note: We don't count swarm members towards totalAliens to allow full groups to spawn without cutting off mid-group
+                        // Note: We don't count swarm members towards totalAliens!
                     }
                 } else {
                     enemies.push(createEnemy(type, startX+c*70, 40+r*55));
@@ -315,7 +317,36 @@ function createEnemy(type,x,y) {
     if(t.producer) { enemy.producer=true; enemy.undamagedTime=0; enemy.productionCooldown=0; }
     if(t.gravity) enemy.gravity=true;
     if(t.armored) enemy.armored=true;
-    if(t.leader) enemy.leader=true; // SWARM_LEADER
+    if(t.leader) {
+        enemy.leader=true;
+        
+        // 🐝 5% CHANCE TO SPAWN AS MEGA SWARM LEADER!
+        if(Math.random() < 0.05) {
+            enemy.isMega = true;
+            enemy.hp = 7; // INCREASED HP!
+            enemy.maxHp = 7;
+            enemy.pts = 120; // More points!
+            enemy.w = 70; // BIGGER SIZE!
+            enemy.h = 70;
+            enemy.megaSwarmCount = 12 + Math.floor(Math.random()*18); // 12-29 members!
+            
+            // MEGA has GOLD color!
+            enemy.col = '#ff3300';
+            
+            // Epic spawn particles!
+            for(let i=0;i<80;i++) {
+                const ang=Math.random()*Math.PI*2;
+                const spd=150+Math.random()*250;
+                particles.push({
+                    x:enemy.x+enemy.w/2,y:enemy.y+enemy.h/2,
+                    vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,
+                    life:1.5,sz:4+Math.random()*3,col:'#ff3300'
+                });
+            }
+            tone(1800,0.5,'sine',0.15);
+            shake(20);
+        }
+    }
     
     return enemy;
 }
@@ -1083,12 +1114,15 @@ function update(dt) {
                 }
             } else if(e.leaderRef && e.leaderRef.hp>0) {
                 // CHAOTIC SWARMING around leader!
-                const leaderX = e.leaderRef.x + e.leaderRef.w/2;
-                const leaderY = e.leaderRef.y + e.leaderRef.h/2;
+                const leaderX = e.leaderRef.x + e.leaderRef.w/2;  // ✅ CENTER X
+                const leaderY = e.leaderRef.y + e.leaderRef.h/2;  // ✅ CENTER Y
                 
                 // Orbit + erratic darting + zigzag
                 e.orbitAngle += dt * (3 + Math.sin(e.orbitPhase)*2); // Variable speed!
-                const orbitDist = 25 + Math.sin(performance.now()/200+e.orbitPhase)*15; // Pulsing distance
+                
+                // 🐝 MEGA LEADERS have larger orbit distance!
+                const baseOrbitDist = e.leaderRef.isMega ? 55 : 25;
+                const orbitDist = baseOrbitDist + Math.sin(performance.now()/200+e.orbitPhase)*15; // Pulsing distance
                 
                 // Base orbit position
                 let targetX = leaderX + Math.cos(e.orbitAngle)*orbitDist;
@@ -1106,8 +1140,8 @@ function update(dt) {
                 e.y+=(targetY-e.y)*dt*6;
             } else if(e.swarmTarget && e.swarmTarget.hp>0) {
                 // CHAOTIC SWARMING around new target alien!
-                const targetX = e.swarmTarget.x + e.swarmTarget.w/2;
-                const targetY = e.swarmTarget.y + e.swarmTarget.h/2;
+                const targetX = e.swarmTarget.x + e.swarmTarget.w/2;  // ✅ CENTER X
+                const targetY = e.swarmTarget.y + e.swarmTarget.h/2;  // ✅ CENTER Y
                 
                 e.orbitAngle += dt * (3.5 + Math.sin(e.orbitPhase)*2);
                 const orbitDist = 30 + Math.sin(performance.now()/200+e.orbitPhase)*18;
@@ -2185,6 +2219,10 @@ function draw() {
             ctx.fillRect(cx,cy-spx*2,spx,spx);
         } else if(e.type==='SWARM_LEADER') {
             // SWARM_LEADER - Larger commanding bee
+            // SWARM_LEADER - Scale size if MEGA!
+            const sizeScale = e.isMega ? 1.4 : 1.0;
+            const px = (s/11) * sizeScale; // Adjust pixel size
+            
             ctx.fillStyle=e.col;
             // Antenna
             ctx.fillRect(cx-px*3,cy-px*5,px,px);

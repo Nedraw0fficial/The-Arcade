@@ -57,7 +57,7 @@ const GAMES = [
         title: 'SPACE INVADERS',
         description: 'Defend Earth from alien invaders',
         logo: 'assets/games/space-invaders/logo.png',
-        path: 'games/space-invaders/indexV2.html',
+        path: 'games/space-invaders/indexV2-b.html',
         color: '#5d00ff',
         year: 'February 8th, 2026',
         releaseDate: '2026-02-08'
